@@ -32505,8 +32505,8 @@ async function startMergeOrchestrator(config2) {
   let persisted = { lastShas: {} };
   if ((0, import_node_fs7.existsSync)(persistedPath)) {
     try {
-      const { readFileSync: readFileSync91 } = await import("node:fs");
-      persisted = JSON.parse(readFileSync91(persistedPath, "utf-8"));
+      const { readFileSync: readFileSync92 } = await import("node:fs");
+      persisted = JSON.parse(readFileSync92(persistedPath, "utf-8"));
     } catch {
       persisted = { lastShas: {} };
     }
@@ -32895,8 +32895,8 @@ async function recoverFromRestart(config2) {
   let persistedShasLoaded = 0;
   if ((0, import_node_fs7.existsSync)(persistedPath)) {
     try {
-      const { readFileSync: readFileSync91 } = await import("node:fs");
-      const persisted = JSON.parse(readFileSync91(persistedPath, "utf-8"));
+      const { readFileSync: readFileSync92 } = await import("node:fs");
+      const persisted = JSON.parse(readFileSync92(persistedPath, "utf-8"));
       persistedShasLoaded = Object.keys(persisted.lastShas ?? {}).length;
     } catch {
       persistedShasLoaded = 0;
@@ -33881,10 +33881,10 @@ async function requeueDeadWorkerTasks(teamName, deadWorkerNames, cwd2) {
     await writeFile9(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
     const taskPath2 = absPath(cwd2, TeamPaths.taskFile(sanitized, task.id));
     try {
-      const { readFileSync: readFileSync91, writeFileSync: writeFileSync39 } = await import("fs");
+      const { readFileSync: readFileSync92, writeFileSync: writeFileSync39 } = await import("fs");
       const { withFileLockSync: withFileLockSync2 } = await Promise.resolve().then(() => (init_file_lock(), file_lock_exports));
       withFileLockSync2(taskPath2 + ".lock", () => {
-        const raw = readFileSync91(taskPath2, "utf-8");
+        const raw = readFileSync92(taskPath2, "utf-8");
         const taskData = JSON.parse(raw);
         if (taskData.status === "in_progress") {
           taskData.status = "pending";
@@ -33914,7 +33914,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
     "team.runtime-v2.processCliWorkerVerdicts appendTeamEvent failed"
   );
   const { rename: rename3 } = await import("fs/promises");
-  const { readFileSync: readFileSync91, writeFileSync: writeFileSync39, existsSync: fsExistsSync } = await import("fs");
+  const { readFileSync: readFileSync92, writeFileSync: writeFileSync39, existsSync: fsExistsSync } = await import("fs");
   const { withFileLockSync: withFileLockSync2 } = await Promise.resolve().then(() => (init_file_lock(), file_lock_exports));
   for (const worker of config2.workers) {
     const outputFile = worker.output_file;
@@ -33948,7 +33948,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
       const taskPath2 = absPath(cwd2, TeamPaths.taskFile(sanitized, taskId));
       if (!fsExistsSync(taskPath2)) continue;
       try {
-        const taskRaw = readFileSync91(taskPath2, "utf-8");
+        const taskRaw = readFileSync92(taskPath2, "utf-8");
         const taskData = JSON.parse(taskRaw);
         if (taskData.owner === worker.name && taskData.status === "in_progress") {
           targetTaskId = taskId;
@@ -33976,7 +33976,7 @@ async function processCliWorkerVerdicts(teamName, cwd2) {
     let transitionOk = false;
     try {
       withFileLockSync2(targetTaskPath + ".lock", () => {
-        const raw = readFileSync91(targetTaskPath, "utf-8");
+        const raw = readFileSync92(targetTaskPath, "utf-8");
         const taskData = JSON.parse(raw);
         if (taskData.status !== "in_progress" || taskData.owner !== worker.name) {
           return;
@@ -45975,6 +45975,25 @@ var init_git = __esm({
 });
 
 // src/hud/elements/multi-repo.ts
+function isPidAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function readSessionMeta(sessionDir) {
+  const metaPath = (0, import_node_path17.join)(sessionDir, "_session-meta.json");
+  if (!(0, import_node_fs13.existsSync)(metaPath)) return null;
+  try {
+    const raw = (0, import_node_fs13.readFileSync)(metaPath, "utf-8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
 function isGitRepo(dir) {
   try {
     (0, import_node_child_process11.execSync)("git rev-parse --show-toplevel", {
@@ -46003,6 +46022,11 @@ function countActiveSessions(cwd2) {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       const dirPath = (0, import_node_path17.join)(sessionsDir, entry.name);
+      const meta = readSessionMeta(dirPath);
+      if (meta && typeof meta.pid === "number") {
+        if (isPidAlive(meta.pid)) active++;
+        continue;
+      }
       try {
         const dirStat = (0, import_node_fs13.statSync)(dirPath);
         if (now - dirStat.mtimeMs < ACTIVITY_WINDOW_MS) {
@@ -46075,7 +46099,7 @@ function renderMultiRepo(cwd2) {
   if (!info.hasMarker) {
     return yellow("\u26A0 multi-repo detected") + dim(" \u2014 run: ") + cyan(`echo {} > "${info.parentName}/.omc-workspace"`) + dim(" to enable shared state");
   }
-  const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:")}${green(String(info.activeSessions))}` : ` ${dim("sessions:")}${dim("0")}`;
+  const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:~")}${green(String(info.activeSessions))}` : ` ${dim("sessions:~")}${dim("0")}`;
   return `${dim("mr:")}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
 }
 var import_node_child_process11, import_node_fs13, import_node_path17, CACHE_TTL_MS4, multiRepoCache;

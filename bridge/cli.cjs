@@ -46014,38 +46014,14 @@ function looksLikeRepo(entryPath) {
 function countActiveSessions(cwd2) {
   const sessionsDir = (0, import_node_path17.join)(getOmcRoot(cwd2), "state", "sessions");
   if (!(0, import_node_fs13.existsSync)(sessionsDir)) return 0;
-  const ACTIVITY_WINDOW_MS = 30 * 60 * 1e3;
-  const now = Date.now();
   let active = 0;
   try {
     const entries = (0, import_node_fs13.readdirSync)(sessionsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const dirPath = (0, import_node_path17.join)(sessionsDir, entry.name);
-      const meta = readSessionMeta(dirPath);
-      if (meta && typeof meta.pid === "number") {
-        if (isPidAlive(meta.pid)) active++;
-        continue;
-      }
-      try {
-        const dirStat = (0, import_node_fs13.statSync)(dirPath);
-        if (now - dirStat.mtimeMs < ACTIVITY_WINDOW_MS) {
-          active++;
-          continue;
-        }
-        const inner = (0, import_node_fs13.readdirSync)(dirPath);
-        for (const f of inner) {
-          try {
-            const fstat = (0, import_node_fs13.statSync)((0, import_node_path17.join)(dirPath, f));
-            if (now - fstat.mtimeMs < ACTIVITY_WINDOW_MS) {
-              active++;
-              break;
-            }
-          } catch {
-          }
-        }
-      } catch {
-      }
+      const meta = readSessionMeta((0, import_node_path17.join)(sessionsDir, entry.name));
+      if (!meta || typeof meta.pid !== "number") continue;
+      if (isPidAlive(meta.pid)) active++;
     }
   } catch {
     return 0;

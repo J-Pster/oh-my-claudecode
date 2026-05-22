@@ -15,7 +15,7 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { cyan, dim, green, yellow } from '../colors.js';
 import { getOmcRoot } from '../../lib/worktree-paths.js';
@@ -98,51 +98,23 @@ function looksLikeRepo(entryPath: string): boolean {
  */
 function countActiveSessions(cwd: string): number {
   // cwd here is verified to be the workspace anchor (marker present),
-  // so getOmcRoot resolves to <cwd>/.omc. We still route through the
-  // canonical helper so OMC_STATE_DIR and OMC_DISABLE_MULTIREPO are
-  // honored — and so this code passes the AST-grep gate.
+  // so getOmcRoot resolves to <cwd>/.omc. Route through the canonical
+  // helper so OMC_STATE_DIR and OMC_DISABLE_MULTIREPO are honored.
   const sessionsDir = join(getOmcRoot(cwd), 'state', 'sessions');
   if (!existsSync(sessionsDir)) return 0;
 
-  // Liveness strategy, in order:
-  //  1. If _session-meta.json exists with a pid we can probe, trust it
-  //     verbatim — alive PID = active session, dead PID = inactive.
-  //  2. If the meta file is missing (legacy session that ran before
-  //     session-start started writing the marker), fall back to the
-  //     30-min mtime heuristic so old sessions aren't undercounted.
-  const ACTIVITY_WINDOW_MS = 30 * 60 * 1000;
-  const now = Date.now();
+  // Authoritative: PID liveness via _session-meta.json. A session dir
+  // without a meta file is not counted — every active session is
+  // expected to have been opened by a session-start hook that wrote
+  // the marker.
   let active = 0;
   try {
     const entries = readdirSync(sessionsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const dirPath = join(sessionsDir, entry.name);
-
-      const meta = readSessionMeta(dirPath);
-      if (meta && typeof meta.pid === 'number') {
-        if (isPidAlive(meta.pid)) active++;
-        continue;
-      }
-
-      // Legacy fallback — mtime within window counts as active.
-      try {
-        const dirStat = statSync(dirPath);
-        if (now - dirStat.mtimeMs < ACTIVITY_WINDOW_MS) {
-          active++;
-          continue;
-        }
-        const inner = readdirSync(dirPath);
-        for (const f of inner) {
-          try {
-            const fstat = statSync(join(dirPath, f));
-            if (now - fstat.mtimeMs < ACTIVITY_WINDOW_MS) {
-              active++;
-              break;
-            }
-          } catch { /* skip */ }
-        }
-      } catch { /* skip */ }
+      const meta = readSessionMeta(join(sessionsDir, entry.name));
+      if (!meta || typeof meta.pid !== 'number') continue;
+      if (isPidAlive(meta.pid)) active++;
     }
   } catch {
     return 0;

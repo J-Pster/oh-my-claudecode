@@ -21,6 +21,7 @@ import { existsSync } from 'fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { performance } from 'perf_hooks';
 import { TeamPaths, absPath, teamStateRoot } from './state-paths.js';
+import { getOmcRoot } from '../lib/worktree-paths.js';
 import { allocateTasksToWorkers } from './allocation-policy.js';
 import { readTeamConfig, readWorkerStatus, readWorkerHeartbeat, readMonitorSnapshot, writeMonitorSnapshot, writeShutdownRequest, readShutdownAck, writeWorkerInbox, listTasksFromFiles, saveTeamConfig, cleanupTeamState, } from './monitor.js';
 import { appendTeamEvent, emitMonitorDerivedEvents } from './events.js';
@@ -1746,7 +1747,7 @@ export async function resumeTeamV2(teamName, cwd) {
 // findActiveTeams — discover running teams
 // ---------------------------------------------------------------------------
 export async function findActiveTeamsV2(cwd) {
-    const root = join(cwd, '.omc', 'state', 'team');
+    const root = join(getOmcRoot(cwd), 'state', 'team');
     if (!existsSync(root))
         return [];
     const entries = await readdir(root, { withFileTypes: true });

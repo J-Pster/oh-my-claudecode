@@ -9,6 +9,7 @@ import { existsSync } from 'fs';
 import { join, basename, isAbsolute, win32 } from 'path';
 import fs from 'fs/promises';
 import { validateTeamName } from './team-name.js';
+import { getOmcRoot } from '../lib/worktree-paths.js';
 import { tmuxExec, tmuxExecAsync, tmuxShell, tmuxCmdAsync } from '../cli/tmux-utils.js';
 import { configureTmuxClipboardForSession, configureTmuxClipboardForSessionAsync } from '../cli/tmux-clipboard.js';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -846,7 +847,7 @@ export async function killWorkerPanes(opts) {
     if (!paneIds.length)
         return; // guard: nothing to kill
     // 1. Write graceful shutdown sentinel
-    const shutdownPath = join(cwd, '.omc', 'state', 'team', teamName, 'shutdown.json');
+    const shutdownPath = join(getOmcRoot(cwd), 'state', 'team', teamName, 'shutdown.json');
     try {
         await fs.writeFile(shutdownPath, JSON.stringify({ requestedAt: Date.now() }));
         const aliveChecks = await Promise.all(paneIds.map(id => isWorkerAlive(id)));

@@ -8,6 +8,7 @@ import { existsSync, readFileSync, mkdirSync, openSync, closeSync, unlinkSync, w
 import { join, sep, resolve, dirname } from 'path';
 import { readStdin } from './lib/stdin.mjs';
 import { atomicWriteFileSync, ensureDirSync } from './lib/atomic-write.mjs';
+import { resolveOmcStateRoot } from './lib/state-root.mjs';
 
 // ============================================================================
 // Session ID resolution (mirrors src/lib/session-id.ts — inlined for .mjs)
@@ -295,14 +296,14 @@ function isPathContained(targetPath, basePath) {
 }
 
 // Initialize .omc directory if needed; returns the omc root (not state subdir)
-function initOmcDir(directory) {
+async function initOmcDir(directory) {
   const cwd = process.cwd();
   // Validate directory is contained within cwd
   if (!isPathContained(directory, cwd)) {
     // Fallback to cwd if directory attempts traversal
     directory = cwd;
   }
-  const omcDir = join(directory, '.omc');
+  const omcDir = await resolveOmcStateRoot(directory);
   const stateDir = join(omcDir, 'state');
 
   if (!existsSync(omcDir)) {
@@ -431,7 +432,7 @@ async function main() {
     const sessionId = validateSessionId(rawSessionId);
 
     // Initialize .omc root directory
-    const omcRoot = initOmcDir(directory);
+    const omcRoot = await initOmcDir(directory);
 
     // Resolve state paths (session-scoped or legacy)
     const { stateDir, statePath } = resolveErrorStatePaths(omcRoot, sessionId);

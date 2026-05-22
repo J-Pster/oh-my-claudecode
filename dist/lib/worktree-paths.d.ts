@@ -66,6 +66,11 @@ export declare function getWorktreeRoot(cwd?: string): string | null;
  */
 export declare function validatePath(inputPath: string): void;
 /**
+ * Clear the sibling retrofit warning cache (useful for testing).
+ * @internal
+ */
+export declare function clearSiblingRetrofitWarnings(): void;
+/**
  * Clear the dual-directory warning cache (useful for testing).
  * @internal
  */
@@ -111,6 +116,7 @@ export declare function resolveOmcPath(relativePath: string, worktreeRoot?: stri
  * State files follow the naming convention: {mode}-state.json
  * Examples: ralph-state.json, ultrawork-state.json, autopilot-state.json
  *
+ * @deprecated Use resolveSessionStatePaths instead.
  * @param stateName - State name (e.g., "ralph", "ultrawork", or "ralph-state")
  * @param worktreeRoot - Optional worktree root
  * @returns Absolute path to state file
@@ -204,6 +210,7 @@ export declare function isValidTranscriptPath(transcriptPath: string): boolean;
  * Resolve a session-scoped state file path.
  * Path: {omcRoot}/state/sessions/{sessionId}/{mode}-state.json
  *
+ * @deprecated Use resolveSessionStatePaths instead.
  * @param stateName - State name (e.g., "ralph", "ultrawork")
  * @param sessionId - Session identifier
  * @param worktreeRoot - Optional worktree root

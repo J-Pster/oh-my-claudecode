@@ -20967,6 +20967,38 @@ function validatePath(inputPath) {
   }
 }
 var dualDirWarnings = /* @__PURE__ */ new Set();
+var siblingRetrofitWarned = /* @__PURE__ */ new Set();
+function warnSiblingRetrofit(workspaceAnchor) {
+  if (siblingRetrofitWarned.has(workspaceAnchor)) return;
+  siblingRetrofitWarned.add(workspaceAnchor);
+  let entries;
+  try {
+    entries = (0, import_fs10.readdirSync)(workspaceAnchor, { withFileTypes: true, encoding: "utf-8" });
+  } catch {
+    return;
+  }
+  const legacyDirs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const entryName = entry.name;
+    const siblingStateDir = (0, import_path11.join)(workspaceAnchor, entryName, OmcPaths.ROOT, "state");
+    if ((0, import_fs10.existsSync)(siblingStateDir)) {
+      legacyDirs.push((0, import_path11.join)(workspaceAnchor, entryName, OmcPaths.ROOT));
+    }
+  }
+  if (legacyDirs.length === 0) return;
+  const sharedOmc = (0, import_path11.join)(workspaceAnchor, OmcPaths.ROOT);
+  const dirList = legacyDirs.map((d) => `  - ${d}`).join("\n");
+  process.stderr.write(
+    `[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}
+  but sibling repos have pre-existing local .omc/state/ content:
+${dirList}
+  Shared state will go to: ${sharedOmc}
+  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"
+  Or manually copy state files to ${sharedOmc}/state/
+`
+  );
+}
 function getProjectIdentifier(worktreeRoot) {
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
   const workspaceRoot = findWorkspaceRoot(root);
@@ -21032,6 +21064,7 @@ function getOmcRoot(worktreeRoot) {
   }
   const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
   if (workspaceAnchor) {
+    warnSiblingRetrofit(workspaceAnchor);
     return (0, import_path11.join)(workspaceAnchor, OmcPaths.ROOT);
   }
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
@@ -23155,7 +23188,7 @@ function getLegacyStateFileCandidates(mode, root) {
   return [...new Set(candidates)];
 }
 function getWorkingDirectoryLocalOmcRoot(root) {
-  return (0, import_path15.join)(root, ".omc");
+  return (0, import_path15.join)(root, OmcPaths.ROOT);
 }
 function shouldCheckWorkingDirectoryLocalState(root) {
   return getWorkingDirectoryLocalOmcRoot(root) !== getOmcRoot(root);

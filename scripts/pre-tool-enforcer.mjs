@@ -476,13 +476,14 @@ function getAgentTrackingInfo(stateDir) {
 }
 
 // Get todo status from project-local todos only
-function getTodoStatus(directory) {
+async function getTodoStatus(directory) {
   let pending = 0;
   let inProgress = 0;
 
   // Check project-local todos
+  const omcRoot = await resolveOmcStateRoot(directory);
   const localPaths = [
-    join(directory, '.omc', 'todos.json'),
+    join(omcRoot, 'todos.json'),
     join(directory, '.claude', 'todos.json')
   ];
 
@@ -1111,7 +1112,7 @@ async function main() {
       }
     }
 
-    const todoStatus = getTodoStatus(directory);
+    const todoStatus = await getTodoStatus(directory);
 
     if (toolName === 'Task' || toolName === 'Agent') {
       const rawTranscriptPath = data.transcript_path || data.transcriptPath || '';

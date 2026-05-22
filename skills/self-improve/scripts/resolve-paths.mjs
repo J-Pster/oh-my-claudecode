@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { resolveOmcStateRoot } from '../../../scripts/lib/state-root.mjs';
 
 const DEFAULT_TOPIC_SLUG = 'default';
 const TOPICS_DIR = 'topics';
@@ -80,13 +81,13 @@ function hasLegacyLayout(baseRoot) {
     || existsSync(join(baseRoot, 'state', 'agent-settings.json'));
 }
 
-function buildPaths(root, projectRoot, topicSlug, scopeMode) {
+function buildPaths(root, projectRoot, topicSlug, scopeMode, baseRoot) {
   const configDir = join(root, 'config');
   const stateDir = join(root, 'state');
   const trackingDir = join(root, 'tracking');
   const paths = {
     project_root: projectRoot,
-    base_root: join(projectRoot, '.omc', 'self-improve'),
+    base_root: baseRoot,
     topic_slug: topicSlug,
     scope_mode: scopeMode,
     root,
@@ -127,9 +128,10 @@ function ensureDirs(paths) {
   }
 }
 
-export function resolveSelfImprovePaths({ projectRoot = process.cwd(), topic = '', slug = '', sessionId = '' } = {}) {
+export async function resolveSelfImprovePaths({ projectRoot = process.cwd(), topic = '', slug = '', sessionId = '' } = {}) {
   const resolvedProjectRoot = resolve(projectRoot);
-  const baseRoot = join(resolvedProjectRoot, '.omc', 'self-improve');
+  const omcRoot = await resolveOmcStateRoot(resolvedProjectRoot);
+  const baseRoot = join(omcRoot, 'self-improve');
   const explicitSlug = slugify(slug || topic);
   const legacyLayout = hasLegacyLayout(baseRoot);
   const shouldUseLegacyRoot = !slug && !topic && legacyLayout;
@@ -155,7 +157,7 @@ export function resolveSelfImprovePaths({ projectRoot = process.cwd(), topic = '
       ? 'session-scoped'
       : (slug || topic ? 'topic-scoped' : 'default-scoped');
 
-  return { ...buildPaths(root, resolvedProjectRoot, topicSlug, scopeMode), session_id: effectiveSessionId || null };
+  return { ...buildPaths(root, resolvedProjectRoot, topicSlug, scopeMode, baseRoot), session_id: effectiveSessionId || null };
 }
 
 function renderShell(paths) {
@@ -178,14 +180,14 @@ function printHelp() {
   );
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) {
     printHelp();
     return;
   }
 
-  const paths = resolveSelfImprovePaths({
+  const paths = await resolveSelfImprovePaths({
     projectRoot: args.projectRoot,
     topic: args.topic,
     slug: args.slug,
@@ -205,11 +207,9 @@ function main() {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  try {
-    main();
-  } catch (error) {
+  main().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);
     process.exit(1);
-  }
+  });
 }

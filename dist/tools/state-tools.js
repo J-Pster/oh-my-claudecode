@@ -7,7 +7,7 @@
 import { z } from 'zod';
 import { existsSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { resolveStatePath, ensureOmcDir, validateWorkingDirectory, resolveSessionStatePath, ensureSessionStateDir, listSessionIds, validateSessionId, getOmcRoot, } from '../lib/worktree-paths.js';
+import { resolveStatePath, ensureOmcDir, validateWorkingDirectory, resolveSessionStatePath, ensureSessionStateDir, listSessionIds, validateSessionId, getOmcRoot, OmcPaths, } from '../lib/worktree-paths.js';
 import { resolveSessionId } from '../lib/session-id.js';
 import { atomicWriteJsonSync } from '../lib/atomic-write.js';
 import { validatePayload } from '../lib/payload-limits.js';
@@ -133,7 +133,7 @@ function getLegacyStateFileCandidates(mode, root) {
     return [...new Set(candidates)];
 }
 function getWorkingDirectoryLocalOmcRoot(root) {
-    return join(root, '.omc');
+    return join(root, OmcPaths.ROOT);
 }
 function shouldCheckWorkingDirectoryLocalState(root) {
     return getWorkingDirectoryLocalOmcRoot(root) !== getOmcRoot(root);

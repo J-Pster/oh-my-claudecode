@@ -17,6 +17,7 @@ import {
   listSessionIds,
   validateSessionId,
   getOmcRoot,
+  OmcPaths,
 } from '../lib/worktree-paths.js';
 import { resolveSessionId } from '../lib/session-id.js';
 import { atomicWriteJsonSync } from '../lib/atomic-write.js';
@@ -168,7 +169,7 @@ function getLegacyStateFileCandidates(mode: StateToolMode, root: string): string
 }
 
 function getWorkingDirectoryLocalOmcRoot(root: string): string {
-  return join(root, '.omc');
+  return join(root, OmcPaths.ROOT);
 }
 
 function shouldCheckWorkingDirectoryLocalState(root: string): boolean {

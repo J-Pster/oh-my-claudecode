@@ -22,6 +22,7 @@ import { existsSync } from 'fs';
 import { mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { performance } from 'perf_hooks';
 import { TeamPaths, absPath, teamStateRoot } from './state-paths.js';
+import { getOmcRoot } from '../lib/worktree-paths.js';
 import { allocateTasksToWorkers } from './allocation-policy.js';
 import type { TaskAllocationInput, WorkerAllocationInput } from './allocation-policy.js';
 import {
@@ -2237,7 +2238,7 @@ export async function resumeTeamV2(
 // ---------------------------------------------------------------------------
 
 export async function findActiveTeamsV2(cwd: string): Promise<string[]> {
-  const root = join(cwd, '.omc', 'state', 'team');
+  const root = join(getOmcRoot(cwd), 'state', 'team');
   if (!existsSync(root)) return [];
   const entries = await readdir(root, { withFileTypes: true });
   const active: string[] = [];

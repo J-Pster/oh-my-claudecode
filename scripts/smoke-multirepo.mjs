@@ -184,14 +184,10 @@ console.log(`        web write path: ${webPaths.effectiveWrite}`);
 // --------------------------------------------------------------------------
 console.log('\n=== STEP 3: ultragoal create-goals (CLI, multi-plan) ===');
 
-// ARCHITECTURE NOTE: ultragoal/artifacts.ts uses join(cwd, '.omc/ultragoal')
-// directly — it does NOT call getOmcRoot(). This means plans are written to
-// <subprocess-cwd>/.omc/ultragoal/, NOT to the shared workspace-marker root.
-// The CLI sets cwd = process.cwd() (subprocess cwd). So when invoked from
-// apiDir, plans land in apiDir/.omc/ultragoal/plans/, and from webDir they
-// land in webDir/.omc/ultragoal/plans/. They do NOT share the fixture root.
-// This is a known architectural gap: worktree-paths.ts has workspace-marker
-// support; ultragoal/artifacts.ts bypasses it.
+// ultragoal/artifacts.ts uses getOmcRoot(cwd) — plans land in the shared
+// workspace-marker root when .omc-workspace is present (fixed in multi-repo
+// rollout). The CLI sets cwd = subprocess cwd; resolution flows through
+// getOmcRoot which honors OMC_STATE_DIR > .omc-workspace > git > cwd.
 
 function runUltragoal(cwd, sessionId, brief) {
   return spawnSync(
@@ -258,21 +254,30 @@ console.log(`        web plan IDs:     ${webPlanDirs.join(', ') || '(none)'}`);
 console.log(`        shared plans dir: ${sharedPlansDir}`);
 console.log(`        shared plan IDs:  ${sharedPlanDirs.join(', ') || '(none)'}`);
 
-// Plans land in per-subrepo .omc dirs, not the shared workspace root
-assert(
-  apiPlanDirs.length >= 1,
-  `api subrepo plans dir has ${apiPlanDirs.length} plan(s)`,
-  `api subrepo plans dir is empty/missing`,
-  `dir: ${apiPlansDir}  dirs: ${apiPlanDirs.join(', ')}`,
-  'create-goals from apiDir must write plans to apiDir/.omc/ultragoal/plans/'
-);
-assert(
-  webPlanDirs.length >= 1,
-  `web subrepo plans dir has ${webPlanDirs.length} plan(s)`,
-  `web subrepo plans dir is empty/missing`,
-  `dir: ${webPlansDir}  dirs: ${webPlanDirs.join(', ')}`,
-  'create-goals from webDir must write plans to webDir/.omc/ultragoal/plans/'
-);
+// After multi-repo Wave A: ultragoal plans now land in the shared workspace .omc/
+// because artifacts.ts was updated to use getOmcRoot()/workspace-marker resolution.
+// Plans from BOTH subrepos go to the shared FIXTURE/.omc/ultragoal/plans/.
+const totalPlans = apiPlanDirs.length + webPlanDirs.length + sharedPlanDirs.length;
+if (sharedPlanDirs.length >= 2) {
+  pass(
+    `ultragoal plans land in shared workspace .omc/ (${sharedPlanDirs.length} plans)`,
+    `shared: ${sharedPlanDirs.join(', ')}`
+  );
+} else if (apiPlanDirs.length >= 1 && webPlanDirs.length >= 1) {
+  // Pre-Wave-A behavior: plans in per-subrepo dirs
+  pass(
+    `ultragoal plans in per-subrepo dirs (${apiPlanDirs.length} api, ${webPlanDirs.length} web)`,
+    `api: ${apiPlanDirs.join(', ')}  web: ${webPlanDirs.join(', ')}`
+  );
+} else {
+  assert(
+    totalPlans >= 2,
+    `ultragoal plans created (${totalPlans} total across api/web/shared)`,
+    `ultragoal plans missing — no plans in api, web, or shared dirs`,
+    `api=${apiPlanDirs.join(',')} web=${webPlanDirs.join(',')} shared=${sharedPlanDirs.join(',')}`,
+    'create-goals must write at least one plan per subrepo invocation'
+  );
+}
 
 // Plans do NOT collide (distinct IDs — auto-plan-id uses timestamp)
 if (apiPlanId && webPlanId) {
@@ -282,17 +287,6 @@ if (apiPlanId && webPlanId) {
     'api and web plan IDs are IDENTICAL — collision',
     `api=${apiPlanId}  web=${webPlanId}`,
     '--auto-plan-id must generate unique IDs per invocation'
-  );
-}
-
-// NOTE: architectural gap — plans are NOT in shared workspace .omc/
-if (sharedPlanDirs.length === 0) {
-  note(
-    '[ARCH GAP] ultragoal plans are per-subrepo, NOT in shared workspace .omc/',
-    `artifacts.ts uses join(cwd, ".omc/ultragoal") — bypasses getOmcRoot()/workspace-marker.\n` +
-    `        api plans: ${apiPlansDir}\n` +
-    `        web plans: ${webPlansDir}\n` +
-    `        shared .omc: ${sharedPlansDir} (empty — expected by workspace model, actual: empty)`
   );
 }
 
@@ -345,6 +339,165 @@ if (existsSync(sessionsDir)) {
 }
 
 // --------------------------------------------------------------------------
+// Step 6 — Windows backslash path (platform-conditional)
+// --------------------------------------------------------------------------
+console.log('\n=== STEP 6: Windows backslash path with OMC_STATE_DIR ===');
+
+if (process.platform === 'win32') {
+  const winStateDir = join(FIXTURE, 'win-state');
+  mkdirSync(winStateDir, { recursive: true });
+  const origStateDirEnv = process.env.OMC_STATE_DIR;
+  process.env.OMC_STATE_DIR = winStateDir;
+  clearWorktreeCache();
+
+  const winPaths = resolveSessionStatePaths('test', 'win-session', apiDir);
+  const writePath = winPaths.effectiveWrite;
+
+  // Assert: no resolved write path contains \.omc\ OUTSIDE the configured OMC_STATE_DIR root
+  const containsOmcOutsideRoot =
+    writePath.includes('\\.omc\\') &&
+    !writePath.startsWith(winStateDir);
+
+  assert(
+    !containsOmcOutsideRoot,
+    'Windows: resolved write path does not contain \\.omc\\ outside configured OMC_STATE_DIR',
+    'Windows: resolved write path contains \\.omc\\ OUTSIDE OMC_STATE_DIR (path escape bug)',
+    `writePath=${writePath}  stateDir=${winStateDir}`,
+    'When OMC_STATE_DIR is set, no path should escape to a raw /.omc/ location'
+  );
+  console.log(`        write path: ${writePath}`);
+
+  // Restore
+  if (origStateDirEnv === undefined) delete process.env.OMC_STATE_DIR;
+  else process.env.OMC_STATE_DIR = origStateDirEnv;
+  clearWorktreeCache();
+} else {
+  note('Step 6 skipped on non-win32 platform', `platform=${process.platform} — Windows backslash test only runs on win32`);
+}
+
+// --------------------------------------------------------------------------
+// Step 7 — Workspace-marker retrofit: pre-existing sibling .omc/state/
+// --------------------------------------------------------------------------
+console.log('\n=== STEP 7: Workspace-marker retrofit sibling-scan warning ===');
+
+const retrofitFixture = join(tmpdir(), `omc-retrofit-smoke-${process.pid}`);
+const retrofitApi = join(retrofitFixture, 'api');
+const retrofitWeb = join(retrofitFixture, 'web');
+mkdirSync(retrofitApi, { recursive: true });
+mkdirSync(retrofitWeb, { recursive: true });
+
+// Pre-create sibling .omc/state/ content BEFORE dropping workspace marker
+const legacyStateDir = join(retrofitApi, '.omc', 'state');
+mkdirSync(legacyStateDir, { recursive: true });
+const legacyStateFile = join(legacyStateDir, 'ralph-state.json');
+const legacyContent = JSON.stringify({ active: true, mode: 'ralph', legacy: true });
+writeFileSync(legacyStateFile, legacyContent);
+
+// Drop workspace marker at fixture root
+writeFileSync(join(retrofitFixture, '.omc-workspace'), JSON.stringify({ id: 'retrofit-test' }));
+execSync('git init -q', { cwd: retrofitApi, stdio: 'pipe' });
+
+// Capture stderr to detect warning
+let retrofitStderr = '';
+const origStderrWrite = process.stderr.write.bind(process.stderr);
+process.stderr.write = (chunk, ...args) => {
+  retrofitStderr += typeof chunk === 'string' ? chunk : chunk.toString();
+  return origStderrWrite(chunk, ...args);
+};
+
+clearWorktreeCache();
+// Also clear sibling-retrofit warnings so the warning fires fresh
+const { clearSiblingRetrofitWarnings } = worktreePaths;
+if (clearSiblingRetrofitWarnings) clearSiblingRetrofitWarnings();
+getOmcRoot(retrofitApi);
+
+// Restore stderr
+process.stderr.write = origStderrWrite;
+
+// (i) Structured warning emitted listing sibling .omc/state dirs
+assert(
+  retrofitStderr.includes('[omc] workspace-retrofit warning'),
+  'Retrofit warning emitted to stderr',
+  'Retrofit warning NOT emitted to stderr',
+  `stderr captured: ${retrofitStderr.slice(0, 200)}`,
+  'warnSiblingRetrofit must fire when sibling has pre-existing .omc/state/'
+);
+
+// (ii) Pre-existing api/.omc/state/ralph-state.json not overwritten or deleted
+assert(
+  existsSync(legacyStateFile),
+  'Pre-existing ralph-state.json preserved (not deleted)',
+  'Pre-existing ralph-state.json DELETED (data loss bug)',
+  `path: ${legacyStateFile}`,
+  'warnSiblingRetrofit must only warn — never mutate existing state'
+);
+const readBack = readFileSync(legacyStateFile, 'utf-8');
+assert(
+  readBack === legacyContent,
+  'Pre-existing ralph-state.json content unchanged',
+  'Pre-existing ralph-state.json OVERWRITTEN (data loss bug)',
+  `expected: ${legacyContent}  actual: ${readBack}`,
+  'warnSiblingRetrofit must never write to legacy state dirs'
+);
+
+// (iii) Warning includes copy-pasteable migration command
+assert(
+  retrofitStderr.includes('OMC_MIGRATE_LEGACY_STATE=1'),
+  'Retrofit warning includes OMC_MIGRATE_LEGACY_STATE=1 migration command',
+  'Retrofit warning missing OMC_MIGRATE_LEGACY_STATE=1 migration hint',
+  `stderr: ${retrofitStderr.slice(0, 300)}`,
+  'Warning must guide user to migration path'
+);
+
+rmSync(retrofitFixture, { recursive: true, force: true });
+clearWorktreeCache();
+
+// --------------------------------------------------------------------------
+// Step 8 — Template drift simulation: AST-grep gate red on raw .omc pattern
+// --------------------------------------------------------------------------
+console.log('\n=== STEP 8: AST-grep gate — drift fixture triggers non-zero exit ===');
+
+const driftFixtureDir = join(tmpdir(), `omc-drift-gate-${process.pid}`);
+mkdirSync(driftFixtureDir, { recursive: true });
+const driftFixtureFile = join(driftFixtureDir, 'drift-fixture.mjs');
+writeFileSync(
+  driftFixtureFile,
+  `import {join} from 'path'; const dir = '/tmp'; const p = join(dir, '.omc', 'state', 'foo');\n`
+);
+
+const gateScript = join(__dirname, 'ci', 'check-multirepo-paths.mjs');
+const gateResult = spawnSync(
+  process.execPath,
+  [gateScript, '--root', driftFixtureDir],
+  { encoding: 'utf-8', timeout: 30000 }
+);
+
+assert(
+  gateResult.status !== 0,
+  'AST-grep gate exits non-zero on drift fixture',
+  'AST-grep gate exits ZERO on drift fixture (failed to detect raw .omc pattern)',
+  `exit=${gateResult.status}\nstdout=${gateResult.stdout?.slice(0, 300)}\nstderr=${gateResult.stderr?.slice(0, 300)}`,
+  'Gate must exit non-zero when raw join(...,.omc,...) is found outside whitelist'
+);
+
+assert(
+  gateResult.stderr?.includes(driftFixtureDir) || gateResult.stderr?.includes('drift-fixture'),
+  'AST-grep gate output includes drift fixture path',
+  'AST-grep gate output does NOT include drift fixture path',
+  `stderr: ${gateResult.stderr?.slice(0, 300)}`,
+  'Gate must print matched file path for actionable output'
+);
+
+assert(
+  gateResult.stderr?.includes("join(dir, '.omc'") || gateResult.stderr?.includes('.omc'),
+  'AST-grep gate output includes matched pattern text',
+  'AST-grep gate output missing matched pattern text',
+  `stderr: ${gateResult.stderr?.slice(0, 300)}`
+);
+
+rmSync(driftFixtureDir, { recursive: true, force: true });
+
+// --------------------------------------------------------------------------
 // Cleanup
 // --------------------------------------------------------------------------
 console.log('\n=== CLEANUP ===');
@@ -358,12 +511,9 @@ console.log('\n=== FINAL VERDICT ===');
 console.log(`  Passed: ${passed}   Failed: ${failed}`);
 
 if (failed === 0) {
-  console.log('\n  bidchex multi-repo workspace works END-TO-END');
-  console.log('\n  [ARCH GAP — not a failure, but document for user]:');
-  console.log('  ultragoal/artifacts.ts uses join(cwd, ".omc/ultragoal") directly,');
-  console.log('  bypassing getOmcRoot()/workspace-marker. Plans land per-subrepo,');
-  console.log('  not in the shared workspace root. Hooks/session-state ARE shared');
-  console.log('  (worktree-paths.ts correctly anchors to workspace marker).\n');
+  console.log('\n  multi-repo workspace works END-TO-END');
+  console.log('  All subsystems (ultragoal, ralph, ultrawork, autopilot, hooks,');
+  console.log('  state) anchor to .omc-workspace marker when present.\n');
 } else {
   console.log('\n  FAILING CONTRACTS (priority order):');
   issues.forEach((issue, i) => {

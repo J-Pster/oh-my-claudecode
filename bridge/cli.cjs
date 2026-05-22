@@ -5470,6 +5470,37 @@ function validatePath(inputPath) {
     throw new Error(`Invalid path: absolute paths not allowed (${inputPath})`);
   }
 }
+function warnSiblingRetrofit(workspaceAnchor) {
+  if (siblingRetrofitWarned.has(workspaceAnchor)) return;
+  siblingRetrofitWarned.add(workspaceAnchor);
+  let entries;
+  try {
+    entries = (0, import_fs12.readdirSync)(workspaceAnchor, { withFileTypes: true, encoding: "utf-8" });
+  } catch {
+    return;
+  }
+  const legacyDirs = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const entryName = entry.name;
+    const siblingStateDir = (0, import_path17.join)(workspaceAnchor, entryName, OmcPaths.ROOT, "state");
+    if ((0, import_fs12.existsSync)(siblingStateDir)) {
+      legacyDirs.push((0, import_path17.join)(workspaceAnchor, entryName, OmcPaths.ROOT));
+    }
+  }
+  if (legacyDirs.length === 0) return;
+  const sharedOmc = (0, import_path17.join)(workspaceAnchor, OmcPaths.ROOT);
+  const dirList = legacyDirs.map((d) => `  - ${d}`).join("\n");
+  process.stderr.write(
+    `[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}
+  but sibling repos have pre-existing local .omc/state/ content:
+${dirList}
+  Shared state will go to: ${sharedOmc}
+  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"
+  Or manually copy state files to ${sharedOmc}/state/
+`
+  );
+}
 function getProjectIdentifier(worktreeRoot) {
   const root2 = worktreeRoot || getWorktreeRoot() || process.cwd();
   const workspaceRoot = findWorkspaceRoot(root2);
@@ -5535,6 +5566,7 @@ function getOmcRoot(worktreeRoot) {
   }
   const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
   if (workspaceAnchor) {
+    warnSiblingRetrofit(workspaceAnchor);
     return (0, import_path17.join)(workspaceAnchor, OmcPaths.ROOT);
   }
   const root2 = worktreeRoot || getWorktreeRoot() || process.cwd();
@@ -5850,7 +5882,7 @@ function validateWorkingDirectoryOrLinkedWorktree(workingDirectory) {
   }
   return trustedRoot;
 }
-var import_crypto4, import_child_process6, import_fs12, import_os4, import_path17, WORKSPACE_MARKER, OmcPaths, MAX_WORKTREE_CACHE_SIZE, worktreeCacheMap, workspaceCacheMap, dualDirWarnings, SESSION_ID_REGEX, processSessionId;
+var import_crypto4, import_child_process6, import_fs12, import_os4, import_path17, WORKSPACE_MARKER, OmcPaths, MAX_WORKTREE_CACHE_SIZE, worktreeCacheMap, workspaceCacheMap, dualDirWarnings, siblingRetrofitWarned, SESSION_ID_REGEX, processSessionId;
 var init_worktree_paths = __esm({
   "src/lib/worktree-paths.ts"() {
     "use strict";
@@ -5882,6 +5914,7 @@ var init_worktree_paths = __esm({
     worktreeCacheMap = /* @__PURE__ */ new Map();
     workspaceCacheMap = /* @__PURE__ */ new Map();
     dualDirWarnings = /* @__PURE__ */ new Set();
+    siblingRetrofitWarned = /* @__PURE__ */ new Set();
     SESSION_ID_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
     processSessionId = null;
   }
@@ -11004,6 +11037,23 @@ function install(options = {}) {
       };
       (0, import_fs37.writeFileSync)(VERSION_FILE, JSON.stringify(versionMetadata, null, 2));
       log3("Saved version metadata");
+      try {
+        const omcRoot = getOmcRoot();
+        (0, import_fs37.mkdirSync)(omcRoot, { recursive: true });
+        const templateVersionStamp = {
+          version: targetVersion,
+          installedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          pluginRoot: process.env.CLAUDE_PLUGIN_ROOT ?? null
+        };
+        (0, import_fs37.writeFileSync)(
+          (0, import_path49.join)(omcRoot, "template-version.json"),
+          JSON.stringify(templateVersionStamp, null, 2)
+        );
+        log3("Saved template-version stamp");
+      } catch (error2) {
+        const message = error2 instanceof Error ? error2.message : String(error2);
+        log3(`  Warning: Could not write template-version stamp (non-fatal): ${message}`);
+      }
     } else {
       log3("Skipping version metadata (project-scoped plugin)");
     }
@@ -11065,6 +11115,7 @@ var init_installer = __esm({
     init_mcp_registry();
     init_paths3();
     init_hud_wrapper_template();
+    init_worktree_paths();
     init_user_skill_compat();
     CLAUDE_CONFIG_DIR = getClaudeConfigDir();
     AGENTS_DIR = (0, import_path49.join)(CLAUDE_CONFIG_DIR, "agents");
@@ -26429,7 +26480,7 @@ async function wakeOpenClaw(event, context) {
         const paneId = process.env.TMUX_PANE;
         const projectPath = context.projectPath;
         if (paneId && projectPath) {
-          const stateDir = (0, import_path76.join)(projectPath, ".omc", "state");
+          const stateDir = (0, import_path76.join)(getOmcRoot(projectPath), "state");
           const fresh = getNewPaneTail2(paneId, stateDir, 15);
           tmuxTail = fresh || void 0;
         }
@@ -26513,6 +26564,7 @@ var init_openclaw = __esm({
     init_signal();
     init_dedupe();
     import_path76 = require("path");
+    init_worktree_paths();
     init_tmux();
     init_formatter();
     DEBUG = process.env.OMC_OPENCLAW_DEBUG === "1";
@@ -27478,7 +27530,7 @@ async function notify(event, data) {
         const { capturePaneContent: capturePaneContent3 } = await Promise.resolve().then(() => (init_tmux_detector(), tmux_detector_exports));
         const { getNewPaneTail: getNewPaneTail2 } = await Promise.resolve().then(() => (init_pane_fresh_capture(), pane_fresh_capture_exports));
         const tailLines = getTmuxTailLines(config2);
-        const rawTail = payload.projectPath ? getNewPaneTail2(payload.tmuxPaneId, (0, import_path79.join)(payload.projectPath, ".omc", "state"), tailLines) : capturePaneContent3(payload.tmuxPaneId, tailLines);
+        const rawTail = payload.projectPath ? getNewPaneTail2(payload.tmuxPaneId, (0, import_path79.join)(getOmcRoot(payload.projectPath), "state"), tailLines) : capturePaneContent3(payload.tmuxPaneId, tailLines);
         if (rawTail) {
           payload.tmuxTail = rawTail;
           payload.maxTailLines = tailLines;
@@ -27573,6 +27625,7 @@ var init_notifications = __esm({
     init_hook_config();
     init_template_engine();
     import_path79 = require("path");
+    init_worktree_paths();
     init_dispatcher2();
     init_config();
     init_presets();
@@ -30165,7 +30218,7 @@ async function isWorkerAlive(paneId) {
 async function killWorkerPanes(opts) {
   const { paneIds, leaderPaneId, teamName, cwd: cwd2, graceMs = 1e4 } = opts;
   if (!paneIds.length) return;
-  const shutdownPath = (0, import_path85.join)(cwd2, ".omc", "state", "team", teamName, "shutdown.json");
+  const shutdownPath = (0, import_path85.join)(getOmcRoot(cwd2), "state", "team", teamName, "shutdown.json");
   try {
     await import_promises10.default.writeFile(shutdownPath, JSON.stringify({ requestedAt: Date.now() }));
     const aliveChecks = await Promise.all(paneIds.map((id) => isWorkerAlive(id)));
@@ -30252,6 +30305,7 @@ var init_tmux_session = __esm({
     import_path85 = require("path");
     import_promises10 = __toESM(require("fs/promises"), 1);
     init_team_name();
+    init_worktree_paths();
     init_tmux_utils();
     init_tmux_clipboard();
     sleep4 = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -34389,7 +34443,7 @@ async function resumeTeamV2(teamName, cwd2) {
   }
 }
 async function findActiveTeamsV2(cwd2) {
-  const root2 = (0, import_path91.join)(cwd2, ".omc", "state", "team");
+  const root2 = (0, import_path91.join)(getOmcRoot(cwd2), "state", "team");
   if (!(0, import_fs73.existsSync)(root2)) return [];
   const entries = await (0, import_promises16.readdir)(root2, { withFileTypes: true });
   const active = [];
@@ -34413,6 +34467,7 @@ var init_runtime_v2 = __esm({
     import_promises16 = require("fs/promises");
     import_perf_hooks2 = require("perf_hooks");
     init_state_paths();
+    init_worktree_paths();
     init_allocation_policy();
     init_monitor();
     init_events();
@@ -34545,7 +34600,7 @@ function sanitizeTaskId(taskId) {
 function canonicalTasksDir(teamName, cwd2) {
   const root2 = cwd2 ?? process.cwd();
   const dir = getTaskStoragePath(root2, sanitizeName(teamName));
-  validateResolvedPath(dir, (0, import_path92.join)(root2, ".omc", "state", "team"));
+  validateResolvedPath(dir, (0, import_path92.join)(getOmcRoot(root2), "state", "team"));
   return dir;
 }
 function failureSidecarPath(teamName, taskId, cwd2) {
@@ -34579,6 +34634,7 @@ var init_task_file_ops = __esm({
     "use strict";
     import_fs74 = require("fs");
     import_path92 = require("path");
+    init_worktree_paths();
     init_config_dir();
     init_tmux_session();
     init_fs_utils();
@@ -35897,10 +35953,10 @@ function getDb(cwd2) {
   return null;
 }
 function getDbPath(cwd2) {
-  return (0, import_path94.join)(cwd2, ".omc", "state", "jobs.db");
+  return (0, import_path94.join)(getOmcRoot(cwd2), "state", "jobs.db");
 }
 function ensureStateDir4(cwd2) {
-  const stateDir = (0, import_path94.join)(cwd2, ".omc", "state");
+  const stateDir = (0, import_path94.join)(getOmcRoot(cwd2), "state");
   if (!(0, import_fs76.existsSync)(stateDir)) {
     (0, import_fs76.mkdirSync)(stateDir, { recursive: true });
   }
@@ -36081,6 +36137,7 @@ var init_job_state_db = __esm({
     "use strict";
     import_fs76 = require("fs");
     import_path94 = require("path");
+    init_worktree_paths();
     DB_SCHEMA_VERSION = 1;
     DEFAULT_CLEANUP_MAX_AGE_MS = 24 * 60 * 60 * 1e3;
     Database = null;
@@ -36709,7 +36766,7 @@ async function processSetupInit(input) {
   };
 }
 function pruneOldStateFiles(directory, maxAgeDays = DEFAULT_STATE_MAX_AGE_DAYS) {
-  const stateDir = (0, import_path96.join)(directory, ".omc/state");
+  const stateDir = (0, import_path96.join)(getOmcRoot(directory), "state");
   if (!(0, import_fs79.existsSync)(stateDir)) {
     return 0;
   }
@@ -36751,7 +36808,7 @@ function pruneOldStateFiles(directory, maxAgeDays = DEFAULT_STATE_MAX_AGE_DAYS) 
   return deletedCount;
 }
 function cleanupOrphanedState(directory) {
-  const stateDir = (0, import_path96.join)(directory, ".omc/state");
+  const stateDir = (0, import_path96.join)(getOmcRoot(directory), "state");
   if (!(0, import_fs79.existsSync)(stateDir)) {
     return 0;
   }
@@ -36831,6 +36888,7 @@ var init_setup = __esm({
     import_path96 = require("path");
     init_beads_context();
     init_config_dir();
+    init_worktree_paths();
     REQUIRED_DIRECTORIES = [
       ".omc/state",
       ".omc/logs",
@@ -74915,7 +74973,7 @@ function getLegacyStateFileCandidates(mode, root2) {
   return [...new Set(candidates)];
 }
 function getWorkingDirectoryLocalOmcRoot(root2) {
-  return (0, import_path26.join)(root2, ".omc");
+  return (0, import_path26.join)(root2, OmcPaths.ROOT);
 }
 function shouldCheckWorkingDirectoryLocalState(root2) {
   return getWorkingDirectoryLocalOmcRoot(root2) !== getOmcRoot(root2);
@@ -88254,6 +88312,7 @@ init_loader();
 var import_node_fs9 = require("node:fs");
 var import_node_path12 = require("node:path");
 init_tmux_utils();
+init_worktree_paths();
 var HELP_TOKENS = /* @__PURE__ */ new Set(["--help", "-h", "help"]);
 var MIN_WORKER_COUNT = 1;
 var MAX_WORKER_COUNT = 20;
@@ -88410,7 +88469,7 @@ function slugifyTask(task) {
 }
 function resolveAvailableTeamName(baseName, cwd2) {
   const sanitizedBase = slugifyTask(baseName);
-  const stateRoot2 = (0, import_node_path12.join)(cwd2, ".omc", "state", "team");
+  const stateRoot2 = (0, import_node_path12.join)(getOmcRoot(cwd2), "state", "team");
   const teamDir3 = (name) => (0, import_node_path12.join)(stateRoot2, name);
   if (!(0, import_node_fs9.existsSync)(teamDir3(sanitizedBase))) return sanitizedBase;
   for (let suffix = 2; suffix <= 99; suffix++) {

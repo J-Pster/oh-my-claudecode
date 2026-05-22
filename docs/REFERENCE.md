@@ -109,6 +109,8 @@ If both configurations exist, **project-scoped takes precedence** over global:
 | `OMC_CODEX_DEFAULT_MODEL`  | _(provider default)_ | Default model for Codex CLI workers                                                                                                                                                                                                                                         |
 | `OMC_GEMINI_DEFAULT_MODEL` | _(provider default)_ | Default model for Gemini CLI workers                                                                                                                                                                                                                                        |
 | `OMC_LSP_TIMEOUT_MS`       | `15000`              | Timeout (ms) for LSP requests. Increase for large repos or slow language servers                                                                                                                                                                                            |
+| `OMC_MIGRATE_LEGACY_STATE` | _(unset)_            | Set to `1` to enable one-shot legacy→session-scoped state migration on next read. See [Legacy state migration](#legacy-state-migration-omc_migrate_legacy_state) below.                                                                                                      |
+| `OMC_DISABLE_MULTIREPO`    | _(unset)_            | Set to `1` to disable workspace-marker resolution and fall back to git-root + cwd resolution order. `OMC_STATE_DIR` is still honoured. See [Rollback / disable multi-repo](#rollback--disable-multi-repo-omc_disable_multirepo) below.                                       |
 | `DISABLE_OMC`              | _(unset)_            | Set to any value to disable all OMC hooks                                                                                                                                                                                                                                   |
 | `OMC_SKIP_HOOKS`           | _(unset)_            | Comma-separated list of hook names to skip                                                                                                                                                                                                                                  |
 
@@ -172,6 +174,41 @@ interface SessionStatePaths {
 ```
 
 The brand prevents a hook from silently passing a read-fallback path to a writer (or vice versa) — TypeScript rejects the cross-assignment at compile time. The only legitimate producer of the brand is `resolveSessionStatePaths()` itself; an ESLint `no-restricted-syntax` rule in `eslint.config.js` blocks `as ReadPath` / `as WritePath` casts anywhere outside `worktree-paths.ts` and its tests. Compile-time regression guard at `src/lib/__tests__/session-state-paths.type-test.ts`.
+
+#### Legacy state migration (`OMC_MIGRATE_LEGACY_STATE`)
+
+When you adopt `OMC_STATE_DIR` or `.omc-workspace` on a repo that already has existing `{worktree}/.omc/state/` files, you can opt in to a one-shot copy of legacy state into the new session-scoped path:
+
+```bash
+export OMC_MIGRATE_LEGACY_STATE=1
+```
+
+Semantics:
+- **Trigger**: checked once per state-file read by callers that wrap their write through the migration helper.
+- **Operation**: copies `{omcRoot}/state/{name}-state.json` → `{omcRoot}/state/sessions/{sessionId}/{name}-state.json` using an atomic `.migrating` sentinel + rename for crash recovery.
+- **Idempotent**: a second run with the flag set is a no-op if the session-scoped file already exists.
+- **Opt-in only**: never triggers automatically; only when `OMC_MIGRATE_LEGACY_STATE=1` is set.
+- **No auto-trigger**: do not set this permanently in your shell profile; set it once for the migration session, then unset it.
+
+#### Rollback / disable multi-repo (`OMC_DISABLE_MULTIREPO`)
+
+If the workspace-marker resolution causes unexpected behaviour (e.g., after dropping a stale `.omc-workspace` marker), you can disable multi-repo path resolution in one env-var flip:
+
+```bash
+export OMC_DISABLE_MULTIREPO=1
+```
+
+Exact semantics:
+- **Skips** `.omc-workspace` marker detection — `findWorkspaceRoot()` returns `null` immediately.
+- **Falls back** to the standard `git rev-parse --show-toplevel` → `process.cwd()` resolution order.
+- **Preserves** `OMC_STATE_DIR` if set — centralized state storage still works.
+- **Scope**: per-process; set in the shell session where you run `claude`, not project-wide.
+
+To restore multi-repo behaviour, unset the variable:
+
+```bash
+unset OMC_DISABLE_MULTIREPO
+```
 
 #### Ultragoal multi-plan layout
 

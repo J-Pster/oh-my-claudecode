@@ -184,6 +184,52 @@ export function validatePath(inputPath) {
 // ============================================================================
 /** Track which dual-dir warnings have been logged to avoid repeated warnings */
 const dualDirWarnings = new Set();
+/** Track which workspace anchors have already had sibling-scan warnings emitted (once per process) */
+const siblingRetrofitWarned = new Set();
+/**
+ * Scan sibling subdirs of a workspace anchor for pre-existing .omc/state/ content.
+ * Fires at most once per process per anchor. Emits a structured warning to stderr.
+ * This is the F2 mitigation: alerts users that sibling repos have legacy state
+ * that will not be picked up by the shared workspace anchor automatically.
+ */
+function warnSiblingRetrofit(workspaceAnchor) {
+    if (siblingRetrofitWarned.has(workspaceAnchor))
+        return;
+    siblingRetrofitWarned.add(workspaceAnchor);
+    let entries;
+    try {
+        entries = readdirSync(workspaceAnchor, { withFileTypes: true, encoding: 'utf-8' });
+    }
+    catch {
+        return;
+    }
+    const legacyDirs = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory())
+            continue;
+        const entryName = entry.name;
+        const siblingStateDir = join(workspaceAnchor, entryName, OmcPaths.ROOT, 'state');
+        if (existsSync(siblingStateDir)) {
+            legacyDirs.push(join(workspaceAnchor, entryName, OmcPaths.ROOT));
+        }
+    }
+    if (legacyDirs.length === 0)
+        return;
+    const sharedOmc = join(workspaceAnchor, OmcPaths.ROOT);
+    const dirList = legacyDirs.map(d => `  - ${d}`).join('\n');
+    process.stderr.write(`[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}\n` +
+        `  but sibling repos have pre-existing local .omc/state/ content:\n${dirList}\n` +
+        `  Shared state will go to: ${sharedOmc}\n` +
+        `  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"\n` +
+        `  Or manually copy state files to ${sharedOmc}/state/\n`);
+}
+/**
+ * Clear the sibling retrofit warning cache (useful for testing).
+ * @internal
+ */
+export function clearSiblingRetrofitWarnings() {
+    siblingRetrofitWarned.clear();
+}
 /**
  * Clear the dual-directory warning cache (useful for testing).
  * @internal
@@ -300,6 +346,7 @@ export function getOmcRoot(worktreeRoot) {
     // share the same .omc/ at the marker location.
     const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
     if (workspaceAnchor) {
+        warnSiblingRetrofit(workspaceAnchor);
         return join(workspaceAnchor, OmcPaths.ROOT);
     }
     const root = worktreeRoot || getWorktreeRoot() || process.cwd();
@@ -331,6 +378,7 @@ export function resolveOmcPath(relativePath, worktreeRoot) {
  * State files follow the naming convention: {mode}-state.json
  * Examples: ralph-state.json, ultrawork-state.json, autopilot-state.json
  *
+ * @deprecated Use resolveSessionStatePaths instead.
  * @param stateName - State name (e.g., "ralph", "ultrawork", or "ralph-state")
  * @param worktreeRoot - Optional worktree root
  * @returns Absolute path to state file
@@ -548,6 +596,7 @@ export function isValidTranscriptPath(transcriptPath) {
  * Resolve a session-scoped state file path.
  * Path: {omcRoot}/state/sessions/{sessionId}/{mode}-state.json
  *
+ * @deprecated Use resolveSessionStatePaths instead.
  * @param stateName - State name (e.g., "ralph", "ultrawork")
  * @param sessionId - Session identifier
  * @param worktreeRoot - Optional worktree root

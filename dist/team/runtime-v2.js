@@ -632,7 +632,7 @@ export async function startTeamV2(config) {
     // Create state directories
     await mkdir(absPath(leaderCwd, TeamPaths.tasks(sanitized)), { recursive: true });
     await mkdir(absPath(leaderCwd, TeamPaths.workers(sanitized)), { recursive: true });
-    await mkdir(join(leaderCwd, '.omc', 'state', 'team', sanitized, 'mailbox'), { recursive: true });
+    await mkdir(join(getOmcRoot(leaderCwd), 'state', 'team', sanitized, 'mailbox'), { recursive: true });
     // AC-8: emit a loud team-event warning naming every missing/untrusted CLI
     // binary so the leader surfaces the fallback decision instead of silently
     // swapping providers.

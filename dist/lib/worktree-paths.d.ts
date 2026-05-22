@@ -66,10 +66,21 @@ export declare function getWorktreeRoot(cwd?: string): string | null;
  */
 export declare function validatePath(inputPath: string): void;
 /**
+ * Scan sibling subdirs of a workspace anchor for pre-existing .omc/state/ content.
+ * Deduplicated per session via a disk marker so repeated hook firings within the
+ * same session don't re-stat siblings or re-emit. A fresh session (new sessionId)
+ * will re-warn — intentional, since the user may not have seen the prior warning.
+ *
+ * Call this once per session (e.g. from session-start.mjs) rather than on every
+ * getOmcRoot() invocation to keep the hot path free of readdirSync calls.
+ */
+export declare function warnSiblingRetrofit(workspaceAnchor: string, sessionId?: string): void;
+/**
  * Clear the sibling retrofit warning cache (useful for testing).
+ * Also removes any disk markers under the given omcStateDir when provided.
  * @internal
  */
-export declare function clearSiblingRetrofitWarnings(): void;
+export declare function clearSiblingRetrofitWarnings(omcStateDir?: string): void;
 /**
  * Clear the dual-directory warning cache (useful for testing).
  * @internal

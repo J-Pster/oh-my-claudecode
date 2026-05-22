@@ -2,6 +2,7 @@
 
 import { existsSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { resolveOmcStateRoot } from '../../../scripts/lib/state-root.mjs';
 
 const DEFAULT_TOPIC_SLUG = 'default';
@@ -206,7 +207,7 @@ async function main() {
   process.stdout.write(`${JSON.stringify(paths, null, 2)}\n`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().catch((error) => {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`${message}\n`);

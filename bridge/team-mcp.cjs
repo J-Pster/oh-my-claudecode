@@ -17832,6 +17832,7 @@ var MAX_WORKTREE_CACHE_SIZE = 8;
 var worktreeCacheMap = /* @__PURE__ */ new Map();
 var workspaceCacheMap = /* @__PURE__ */ new Map();
 function findWorkspaceRoot(startDir) {
+  if (process.env.OMC_DISABLE_MULTIREPO === "1") return null;
   const effectiveStart = startDir || process.cwd();
   let current;
   try {
@@ -17912,38 +17913,6 @@ function getWorktreeRoot(cwd) {
   }
 }
 var dualDirWarnings = /* @__PURE__ */ new Set();
-var siblingRetrofitWarned = /* @__PURE__ */ new Set();
-function warnSiblingRetrofit(workspaceAnchor) {
-  if (siblingRetrofitWarned.has(workspaceAnchor)) return;
-  siblingRetrofitWarned.add(workspaceAnchor);
-  let entries;
-  try {
-    entries = (0, import_fs.readdirSync)(workspaceAnchor, { withFileTypes: true, encoding: "utf-8" });
-  } catch {
-    return;
-  }
-  const legacyDirs = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const entryName = entry.name;
-    const siblingStateDir = (0, import_path2.join)(workspaceAnchor, entryName, OmcPaths.ROOT, "state");
-    if ((0, import_fs.existsSync)(siblingStateDir)) {
-      legacyDirs.push((0, import_path2.join)(workspaceAnchor, entryName, OmcPaths.ROOT));
-    }
-  }
-  if (legacyDirs.length === 0) return;
-  const sharedOmc = (0, import_path2.join)(workspaceAnchor, OmcPaths.ROOT);
-  const dirList = legacyDirs.map((d) => `  - ${d}`).join("\n");
-  process.stderr.write(
-    `[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}
-  but sibling repos have pre-existing local .omc/state/ content:
-${dirList}
-  Shared state will go to: ${sharedOmc}
-  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"
-  Or manually copy state files to ${sharedOmc}/state/
-`
-  );
-}
 function getProjectIdentifier(worktreeRoot) {
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
   const workspaceRoot = findWorkspaceRoot(root);
@@ -18009,7 +17978,6 @@ function getOmcRoot(worktreeRoot) {
   }
   const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
   if (workspaceAnchor) {
-    warnSiblingRetrofit(workspaceAnchor);
     return (0, import_path2.join)(workspaceAnchor, OmcPaths.ROOT);
   }
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
@@ -18903,7 +18871,7 @@ function withFileLockSync(lockPath, fn, opts) {
 
 // src/team/git-worktree.ts
 function getWorktreePath(repoRoot, teamName, workerName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "team", sanitizeName(teamName), "worktrees", sanitizeName(workerName));
+  return (0, import_node_path.join)(getOmcRoot(repoRoot), "team", sanitizeName(teamName), "worktrees", sanitizeName(workerName));
 }
 function getBranchName(teamName, workerName) {
   return `omc-team/${sanitizeName(teamName)}/${sanitizeName(workerName)}`;
@@ -18955,13 +18923,13 @@ function isWorktreeDirtyExcept(wtPath, ignoredRootPaths = []) {
   }
 }
 function getMetadataPath(repoRoot, teamName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "state", "team", sanitizeName(teamName), "worktrees.json");
+  return (0, import_node_path.join)(getOmcRoot(repoRoot), "state", "team", sanitizeName(teamName), "worktrees.json");
 }
 function getLegacyMetadataPath(repoRoot, teamName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "state", "team-bridge", sanitizeName(teamName), "worktrees.json");
+  return (0, import_node_path.join)(getOmcRoot(repoRoot), "state", "team-bridge", sanitizeName(teamName), "worktrees.json");
 }
 function getWorkerStateDir(repoRoot, teamName, workerName) {
-  return (0, import_node_path.join)(repoRoot, ".omc", "state", "team", sanitizeName(teamName), "workers", sanitizeName(workerName));
+  return (0, import_node_path.join)(getOmcRoot(repoRoot), "state", "team", sanitizeName(teamName), "workers", sanitizeName(workerName));
 }
 function getRootAgentsBackupPath(repoRoot, teamName, workerName) {
   return (0, import_node_path.join)(getWorkerStateDir(repoRoot, teamName, workerName), "worktree-root-agents.json");
@@ -19034,7 +19002,7 @@ function readMetadata(repoRoot, teamName) {
   return readMetadataResult(repoRoot, teamName).entries;
 }
 function listRootAgentsBackupIssues(repoRoot, teamName, entries) {
-  const workersDir = (0, import_node_path.join)(repoRoot, ".omc", "state", "team", sanitizeName(teamName), "workers");
+  const workersDir = (0, import_node_path.join)(getOmcRoot(repoRoot), "state", "team", sanitizeName(teamName), "workers");
   if (!(0, import_node_fs.existsSync)(workersDir)) return [];
   const knownWorkers = new Set(entries.map((entry) => sanitizeName(entry.workerName)));
   const issues = [];
@@ -19060,7 +19028,7 @@ function listRootAgentsBackupIssues(repoRoot, teamName, entries) {
 function writeMetadata(repoRoot, teamName, entries) {
   const metaPath = getMetadataPath(repoRoot, teamName);
   validateResolvedPath(metaPath, repoRoot);
-  ensureDirWithMode((0, import_node_path.join)(repoRoot, ".omc", "state", "team", sanitizeName(teamName)));
+  ensureDirWithMode((0, import_node_path.join)(getOmcRoot(repoRoot), "state", "team", sanitizeName(teamName)));
   atomicWriteJson(metaPath, entries);
 }
 function forgetMetadataUnlocked(repoRoot, teamName, workerName) {
@@ -19246,7 +19214,7 @@ function clearScopedTeamState(job) {
       message: `team state cleanup skipped (invalid teamName): ${error2 instanceof Error ? error2.message : String(error2)}`
     };
   }
-  const stateDir = (0, import_path8.join)(job.cwd, ".omc", "state", "team", job.teamName);
+  const stateDir = (0, import_path8.join)(getOmcRoot(job.cwd), "state", "team", job.teamName);
   let worktreeMessage = "worktree cleanup skipped.";
   try {
     const cleanup = cleanupTeamWorktrees(job.teamName, job.cwd);

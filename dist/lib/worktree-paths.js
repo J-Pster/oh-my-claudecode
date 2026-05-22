@@ -10,7 +10,7 @@
  */
 import { createHash } from 'crypto';
 import { execSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, readdirSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, readdirSync, writeFileSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
 import { resolve, normalize, relative, sep, join, isAbsolute, basename, dirname } from 'path';
 import { getClaudeConfigDir } from '../utils/config-dir.js';
@@ -63,6 +63,8 @@ const workspaceCacheMap = new Map();
  * stray marker in $HOME or above as a workspace anchor.
  */
 export function findWorkspaceRoot(startDir) {
+    if (process.env.OMC_DISABLE_MULTIREPO === '1')
+        return null;
     const effectiveStart = startDir || process.cwd();
     let current;
     try {
@@ -188,13 +190,25 @@ const dualDirWarnings = new Set();
 const siblingRetrofitWarned = new Set();
 /**
  * Scan sibling subdirs of a workspace anchor for pre-existing .omc/state/ content.
- * Fires at most once per process per anchor. Emits a structured warning to stderr.
- * This is the F2 mitigation: alerts users that sibling repos have legacy state
- * that will not be picked up by the shared workspace anchor automatically.
+ * Deduplicated per session via a disk marker so repeated hook firings within the
+ * same session don't re-stat siblings or re-emit. A fresh session (new sessionId)
+ * will re-warn — intentional, since the user may not have seen the prior warning.
+ *
+ * Call this once per session (e.g. from session-start.mjs) rather than on every
+ * getOmcRoot() invocation to keep the hot path free of readdirSync calls.
  */
-function warnSiblingRetrofit(workspaceAnchor) {
+export function warnSiblingRetrofit(workspaceAnchor, sessionId) {
     if (siblingRetrofitWarned.has(workspaceAnchor))
         return;
+    // Persistent per-session disk dedupe
+    const sharedOmc = join(workspaceAnchor, OmcPaths.ROOT);
+    if (sessionId) {
+        const markerPath = join(sharedOmc, 'state', `sibling-retrofit-warned-${sessionId}.json`);
+        if (existsSync(markerPath)) {
+            siblingRetrofitWarned.add(workspaceAnchor);
+            return;
+        }
+    }
     siblingRetrofitWarned.add(workspaceAnchor);
     let entries;
     try {
@@ -215,20 +229,53 @@ function warnSiblingRetrofit(workspaceAnchor) {
     }
     if (legacyDirs.length === 0)
         return;
-    const sharedOmc = join(workspaceAnchor, OmcPaths.ROOT);
     const dirList = legacyDirs.map(d => `  - ${d}`).join('\n');
     process.stderr.write(`[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}\n` +
         `  but sibling repos have pre-existing local .omc/state/ content:\n${dirList}\n` +
         `  Shared state will go to: ${sharedOmc}\n` +
-        `  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"\n` +
+        `  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 omc setup\n` +
         `  Or manually copy state files to ${sharedOmc}/state/\n`);
+    // Write disk marker so subsequent hook firings in the same session stay silent
+    if (sessionId) {
+        try {
+            const stateDir = join(sharedOmc, 'state');
+            if (!existsSync(stateDir))
+                mkdirSync(stateDir, { recursive: true });
+            const markerPath = join(stateDir, `sibling-retrofit-warned-${sessionId}.json`);
+            writeFileSync(markerPath, JSON.stringify({ warnedAt: new Date().toISOString(), anchor: workspaceAnchor }));
+        }
+        catch {
+            // Non-fatal — dedupe falls back to in-memory Set for this process
+        }
+    }
 }
 /**
  * Clear the sibling retrofit warning cache (useful for testing).
+ * Also removes any disk markers under the given omcStateDir when provided.
  * @internal
  */
-export function clearSiblingRetrofitWarnings() {
+export function clearSiblingRetrofitWarnings(omcStateDir) {
     siblingRetrofitWarned.clear();
+    if (omcStateDir) {
+        try {
+            const stateDir = join(omcStateDir, 'state');
+            if (!existsSync(stateDir))
+                return;
+            const entries = readdirSync(stateDir, { withFileTypes: true, encoding: 'utf-8' });
+            for (const entry of entries) {
+                const name = entry.name;
+                if (name.startsWith('sibling-retrofit-warned-') && name.endsWith('.json')) {
+                    try {
+                        unlinkSync(join(stateDir, name));
+                    }
+                    catch { /* non-fatal */ }
+                }
+            }
+        }
+        catch {
+            // Non-fatal
+        }
+    }
 }
 /**
  * Clear the dual-directory warning cache (useful for testing).
@@ -346,7 +393,6 @@ export function getOmcRoot(worktreeRoot) {
     // share the same .omc/ at the marker location.
     const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
     if (workspaceAnchor) {
-        warnSiblingRetrofit(workspaceAnchor);
         return join(workspaceAnchor, OmcPaths.ROOT);
     }
     const root = worktreeRoot || getWorktreeRoot() || process.cwd();

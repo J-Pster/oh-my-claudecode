@@ -14,38 +14,77 @@ import { readdirSync, statSync, readFileSync } from 'node:fs';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = resolve(__dirname, '..', '..');
 
-// Parse --root argument
+// Parse --root argument. When --root is provided, the broad WHITELIST_DIRS
+// (e.g. `tests/`) are NOT applied — this allows pointing the gate at a test
+// fixture directory to verify enforcement still triggers.
 const rootArgIdx = process.argv.indexOf('--root');
-const searchRoot = rootArgIdx !== -1 ? resolve(process.argv[rootArgIdx + 1]) : REPO_ROOT;
+const hasRootOverride = rootArgIdx !== -1;
+const searchRoot = hasRootOverride ? resolve(process.argv[rootArgIdx + 1]) : REPO_ROOT;
 
 // Files/dirs that are intentionally allowed to contain raw .omc constructions.
-// Canonical delegators own the path logic; test files assert on constructed paths;
-// scripts/* uses homedir()/.omc for global config (intentional, not workspace state).
+// Canonical delegators own the path logic; specific scripts own workspace-marker
+// resolution; tests assert on constructed paths.
 const WHITELIST_FILES = new Set([
+  // Canonical path resolvers (source of truth)
   'src/lib/worktree-paths.ts',
   'scripts/lib/state-root.mjs',
   'scripts/lib/state-root.cjs',
+  // The gate itself (contains '.omc' literals in its own patterns)
   'scripts/ci/check-multirepo-paths.mjs',
+  // Hook scripts that resolve workspace markers inline (own resolver, pre-dist)
+  'scripts/post-tool-verifier.mjs',
+  'scripts/pre-tool-enforcer.mjs',
+  'scripts/skill-injector.mjs',
+  'scripts/session-start.mjs',
+  // Multi-repo test fixtures and audits (construct fake .omc trees)
+  'scripts/smoke-multirepo.mjs',
+  'scripts/audit-multirepo-e2e.mjs',
 ].map(p => resolve(REPO_ROOT, p)));
 
-// Entire directories whitelisted (raw paths are legitimate in these contexts)
+// Entire directories whitelisted (raw paths are legitimate in these contexts).
+// Keep this list MINIMAL — broad whitelists make the gate cosmetic.
 const WHITELIST_DIRS = [
-  resolve(REPO_ROOT, 'tests'),
-  resolve(REPO_ROOT, 'scripts'),          // scripts use homedir()/.omc for global config
-  resolve(REPO_ROOT, 'src', 'lib'),       // worktree-paths.ts is the canonical source
-  resolve(REPO_ROOT, 'src'),              // __tests__ under src/ construct raw paths for assertions
-  resolve(REPO_ROOT, 'templates'),        // hook templates use homedir()/.omc for global config/update-check (intentional)
+  resolve(REPO_ROOT, 'tests'),       // tests construct raw paths for assertions
+  resolve(REPO_ROOT, 'src', 'lib'),  // canonical path source (worktree-paths.ts and friends)
 ];
 
 function isWhitelisted(filePath) {
   const abs = resolve(filePath);
   if (WHITELIST_FILES.has(abs)) return true;
-  for (const dir of WHITELIST_DIRS) {
-    if (abs.startsWith(dir + sep) || abs.startsWith(dir + '/')) return true;
+  // When user explicitly targets a subtree with --root, skip broad dir whitelists
+  // so the gate can be exercised against fixture directories under tests/.
+  if (!hasRootOverride) {
+    for (const dir of WHITELIST_DIRS) {
+      if (abs.startsWith(dir + sep) || abs.startsWith(dir + '/')) return true;
+    }
+    // Any __tests__ directory anywhere in the repo
+    if (abs.includes(`${sep}__tests__${sep}`) || abs.includes('/__tests__/')) return true;
+    // Any *.test.{ts,tsx,js,mjs,cjs} file constructs fixture paths for assertions
+    if (/\.test\.(ts|tsx|js|mjs|cjs)$/.test(abs)) return true;
   }
-  // Any __tests__ directory anywhere in the repo
-  if (abs.includes(`${sep}__tests__${sep}`) || abs.includes('/__tests__/')) return true;
   return false;
+}
+
+/**
+ * A match is benign when the first argument resolves to a known GLOBAL config root
+ * (homedir(), os.homedir(), getClaudeConfigDir(), CLAUDE_CONFIG_DIR). These are
+ * NOT workspace state — they're per-user installs of the OMC binary itself.
+ * The multi-repo enforcement applies only to workspace-scoped `.omc/`.
+ */
+// Global config first-arg patterns. When join()'s first arg is one of these,
+// the construction is a per-user OMC install config path (NOT workspace state).
+const GLOBAL_FIRST_ARG_PATTERNS = [
+  /^(?:path\.)?join\(\s*homedir\(\)\s*,/,
+  /^(?:path\.)?join\(\s*os\.homedir\(\)\s*,/,
+  /^(?:path\.)?join\(\s*getClaudeConfigDir\(\)\s*,/,
+  /^(?:path\.)?join\(\s*CLAUDE_CONFIG_DIR\s*,/,
+  /^(?:path\.)?join\(\s*configDir\s*,/,
+];
+function isGlobalConfigMatch(matchText) {
+  // matchText looks like: join(homedir(), '.omc', 'state', ...) or path.join(os.homedir(), '.omc', ...)
+  // Args may span lines — normalize whitespace before matching.
+  const normalized = matchText.replace(/\s+/g, ' ').trimStart();
+  return GLOBAL_FIRST_ARG_PATTERNS.some(re => re.test(normalized));
 }
 
 const req = createRequire(resolve(REPO_ROOT, 'package.json'));
@@ -64,11 +103,15 @@ const TS_PATTERNS = [
   "join($_, '.omc', $$$)",
   'join($_, ".omc", $$$)',
   "path.join($_, '.omc', $$$)",
+  "`${$_}/.omc/$$$`",
+  "`${$_}\\.omc\\$$$`",
 ];
 const JS_PATTERNS = [
   "join($_, '.omc', $$$)",
   'join($_, ".omc", $$$)',
   "path.join($_, '.omc', $$$)",
+  "`${$_}/.omc/$$$`",
+  "`${$_}\\.omc\\$$$`",
 ];
 
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'bridge', 'coverage', '.omc']);
@@ -119,7 +162,10 @@ for (const filePath of walkFiles(searchRoot)) {
       const pos = match.range().start;
       const rel = relative(REPO_ROOT, filePath);
       const line = pos?.line ?? '?';
-      const text = match.text().trim().slice(0, 80);
+      const fullText = match.text();
+      const text = fullText.trim().slice(0, 80);
+      // Skip global-config constructions: homedir()/.omc, getClaudeConfigDir()/.omc, etc.
+      if (isGlobalConfigMatch(fullText)) continue;
       hitLines.push(`  ${rel}:${line}  ${text}`);
       totalHits++;
     }

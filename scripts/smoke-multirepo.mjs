@@ -35,6 +35,8 @@ const {
   getProjectIdentifier,
   resolveSessionStatePaths,
   clearWorktreeCache,
+  warnSiblingRetrofit,
+  clearSiblingRetrofitWarnings,
 } = worktreePaths;
 
 const { isProcessAlive } = processUtils;
@@ -406,10 +408,11 @@ process.stderr.write = (chunk, ...args) => {
 };
 
 clearWorktreeCache();
-// Also clear sibling-retrofit warnings so the warning fires fresh
-const { clearSiblingRetrofitWarnings } = worktreePaths;
+// Clear in-memory + disk dedupe so the warning fires fresh in this test
 if (clearSiblingRetrofitWarnings) clearSiblingRetrofitWarnings();
-getOmcRoot(retrofitApi);
+// Trigger via warnSiblingRetrofit directly (lifted off getOmcRoot hot path)
+const retrofitAnchor = findWorkspaceRoot(retrofitApi);
+if (retrofitAnchor) warnSiblingRetrofit(retrofitAnchor);
 
 // Restore stderr
 process.stderr.write = origStderrWrite;

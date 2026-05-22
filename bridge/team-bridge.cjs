@@ -107,10 +107,6 @@ function validateResolvedPath(resolvedPath, expectedBase) {
   }
 }
 
-// src/team/task-file-ops.ts
-var import_fs5 = require("fs");
-var import_path7 = require("path");
-
 // src/lib/worktree-paths.ts
 var import_crypto = require("crypto");
 var import_child_process = require("child_process");
@@ -165,6 +161,7 @@ var MAX_WORKTREE_CACHE_SIZE = 8;
 var worktreeCacheMap = /* @__PURE__ */ new Map();
 var workspaceCacheMap = /* @__PURE__ */ new Map();
 function findWorkspaceRoot(startDir) {
+  if (process.env.OMC_DISABLE_MULTIREPO === "1") return null;
   const effectiveStart = startDir || process.cwd();
   let current;
   try {
@@ -245,38 +242,6 @@ function getWorktreeRoot(cwd) {
   }
 }
 var dualDirWarnings = /* @__PURE__ */ new Set();
-var siblingRetrofitWarned = /* @__PURE__ */ new Set();
-function warnSiblingRetrofit(workspaceAnchor) {
-  if (siblingRetrofitWarned.has(workspaceAnchor)) return;
-  siblingRetrofitWarned.add(workspaceAnchor);
-  let entries;
-  try {
-    entries = (0, import_fs2.readdirSync)(workspaceAnchor, { withFileTypes: true, encoding: "utf-8" });
-  } catch {
-    return;
-  }
-  const legacyDirs = [];
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const entryName = entry.name;
-    const siblingStateDir = (0, import_path3.join)(workspaceAnchor, entryName, OmcPaths.ROOT, "state");
-    if ((0, import_fs2.existsSync)(siblingStateDir)) {
-      legacyDirs.push((0, import_path3.join)(workspaceAnchor, entryName, OmcPaths.ROOT));
-    }
-  }
-  if (legacyDirs.length === 0) return;
-  const sharedOmc = (0, import_path3.join)(workspaceAnchor, OmcPaths.ROOT);
-  const dirList = legacyDirs.map((d) => `  - ${d}`).join("\n");
-  process.stderr.write(
-    `[omc] workspace-retrofit warning: .omc-workspace anchor found at ${workspaceAnchor}
-  but sibling repos have pre-existing local .omc/state/ content:
-${dirList}
-  Shared state will go to: ${sharedOmc}
-  To migrate legacy state: OMC_MIGRATE_LEGACY_STATE=1 node -e "require('oh-my-claudecode')"
-  Or manually copy state files to ${sharedOmc}/state/
-`
-  );
-}
 function getProjectIdentifier(worktreeRoot) {
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
   const workspaceRoot = findWorkspaceRoot(root);
@@ -342,12 +307,15 @@ function getOmcRoot(worktreeRoot) {
   }
   const workspaceAnchor = findWorkspaceRoot(worktreeRoot);
   if (workspaceAnchor) {
-    warnSiblingRetrofit(workspaceAnchor);
     return (0, import_path3.join)(workspaceAnchor, OmcPaths.ROOT);
   }
   const root = worktreeRoot || getWorktreeRoot() || process.cwd();
   return (0, import_path3.join)(root, OmcPaths.ROOT);
 }
+
+// src/team/task-file-ops.ts
+var import_fs5 = require("fs");
+var import_path7 = require("path");
 
 // src/team/tmux-session.ts
 var import_fs3 = require("fs");
@@ -1058,8 +1026,8 @@ function configPath(teamName) {
   return result;
 }
 function shadowRegistryPath(workingDirectory) {
-  const result = (0, import_path9.join)(workingDirectory, ".omc", "state", "team-mcp-workers.json");
-  validateResolvedPath(result, (0, import_path9.join)(workingDirectory, ".omc", "state"));
+  const result = (0, import_path9.join)(getOmcRoot(workingDirectory), "state", "team-mcp-workers.json");
+  validateResolvedPath(result, (0, import_path9.join)(getOmcRoot(workingDirectory), "state"));
   return result;
 }
 function unregisterMcpWorker(teamName, workerName, workingDirectory) {
@@ -1125,7 +1093,7 @@ function listMcpWorkers(teamName, workingDirectory) {
 var import_fs9 = require("fs");
 var import_path10 = require("path");
 function heartbeatPath(workingDirectory, teamName, workerName) {
-  return (0, import_path10.join)(workingDirectory, ".omc", "state", "team-bridge", sanitizeName(teamName), `${sanitizeName(workerName)}.heartbeat.json`);
+  return (0, import_path10.join)(getOmcRoot(workingDirectory), "state", "team-bridge", sanitizeName(teamName), `${sanitizeName(workerName)}.heartbeat.json`);
 }
 function writeHeartbeat(workingDirectory, data) {
   const filePath = heartbeatPath(workingDirectory, data.teamName, data.workerName);
@@ -1166,11 +1134,11 @@ function deleteHeartbeat(workingDirectory, teamName, workerName) {
 var import_node_path = require("node:path");
 var DEFAULT_MAX_LOG_SIZE = 5 * 1024 * 1024;
 function getLogPath(workingDirectory, teamName) {
-  return (0, import_node_path.join)(workingDirectory, ".omc", "logs", `team-bridge-${teamName}.jsonl`);
+  return (0, import_node_path.join)(getOmcRoot(workingDirectory), "logs", `team-bridge-${teamName}.jsonl`);
 }
 function logAuditEvent(workingDirectory, event) {
   const logPath = getLogPath(workingDirectory, event.teamName);
-  const dir = (0, import_node_path.join)(workingDirectory, ".omc", "logs");
+  const dir = (0, import_node_path.join)(getOmcRoot(workingDirectory), "logs");
   validateResolvedPath(logPath, workingDirectory);
   ensureDirWithMode(dir);
   const line = JSON.stringify(event) + "\n";
@@ -1397,11 +1365,11 @@ var import_path13 = require("path");
 var import_node_fs = require("node:fs");
 var import_node_path3 = require("node:path");
 function getUsageLogPath(workingDirectory, teamName) {
-  return (0, import_node_path3.join)(workingDirectory, ".omc", "logs", `team-usage-${teamName}.jsonl`);
+  return (0, import_node_path3.join)(getOmcRoot(workingDirectory), "logs", `team-usage-${teamName}.jsonl`);
 }
 function recordTaskUsage(workingDirectory, teamName, record) {
   const logPath = getUsageLogPath(workingDirectory, teamName);
-  const dir = (0, import_node_path3.join)(workingDirectory, ".omc", "logs");
+  const dir = (0, import_node_path3.join)(getOmcRoot(workingDirectory), "logs");
   validateResolvedPath(logPath, workingDirectory);
   ensureDirWithMode(dir);
   appendFileWithMode(logPath, JSON.stringify(record) + "\n");
@@ -1754,7 +1722,7 @@ function buildTaskPrompt(task, messages, config) {
   return result;
 }
 function writePromptFile(config, taskId, prompt) {
-  const dir = (0, import_path14.join)(config.workingDirectory, ".omc", "prompts");
+  const dir = (0, import_path14.join)(getOmcRoot(config.workingDirectory), "prompts");
   ensureDirWithMode(dir);
   const filename = `team-${config.teamName}-task-${taskId}-${Date.now()}.md`;
   const filePath = (0, import_path14.join)(dir, filename);
@@ -1762,7 +1730,7 @@ function writePromptFile(config, taskId, prompt) {
   return filePath;
 }
 function getOutputPath(config, taskId) {
-  const dir = (0, import_path14.join)(config.workingDirectory, ".omc", "outputs");
+  const dir = (0, import_path14.join)(getOmcRoot(config.workingDirectory), "outputs");
   ensureDirWithMode(dir);
   const suffix = Math.random().toString(36).slice(2, 8);
   return (0, import_path14.join)(

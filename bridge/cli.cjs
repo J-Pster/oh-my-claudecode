@@ -6759,7 +6759,7 @@ async function removeFileIfExists(filePath) {
   }
 }
 function sleep2(ms) {
-  return new Promise((resolve21) => setTimeout(resolve21, ms));
+  return new Promise((resolve22) => setTimeout(resolve22, ms));
 }
 var import_child_process9, fs5, fsPromises2, path5, import_url6, import_child_process10, import_util6, execFileAsync3, BRIDGE_SPAWN_TIMEOUT_MS, DEFAULT_GRACE_PERIOD_MS, SIGTERM_GRACE_MS, ownedBridgeSessionIds, USE_TCP_FALLBACK;
 var init_bridge_manager = __esm({
@@ -7819,7 +7819,7 @@ function withFileLockSync(lockPath, fn, opts) {
   }
 }
 function sleep3(ms) {
-  return new Promise((resolve21) => setTimeout(resolve21, ms));
+  return new Promise((resolve22) => setTimeout(resolve22, ms));
 }
 async function acquireFileLock(lockPath, opts) {
   const staleLockMs = opts?.staleLockMs ?? DEFAULT_STALE_LOCK_MS;
@@ -24898,7 +24898,7 @@ async function pollTelegram(config2, state, rateLimiter) {
   try {
     const offset = state.telegramLastUpdateId ? state.telegramLastUpdateId + 1 : 0;
     const path22 = `/bot${config2.telegramBotToken}/getUpdates?offset=${offset}&timeout=0`;
-    const updates = await new Promise((resolve21, reject) => {
+    const updates = await new Promise((resolve22, reject) => {
       const req = (0, import_https.request)(
         {
           hostname: "api.telegram.org",
@@ -24915,7 +24915,7 @@ async function pollTelegram(config2, state, rateLimiter) {
             try {
               const body = JSON.parse(Buffer.concat(chunks).toString("utf-8"));
               if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
-                resolve21(body.result || []);
+                resolve22(body.result || []);
               } else {
                 reject(new Error(`HTTP ${res.statusCode}`));
               }
@@ -24979,7 +24979,7 @@ async function pollTelegram(config2, state, rateLimiter) {
             text: "Injected into Claude Code session.",
             reply_to_message_id: msg.message_id
           });
-          await new Promise((resolve21) => {
+          await new Promise((resolve22) => {
             const replyReq = (0, import_https.request)(
               {
                 hostname: "api.telegram.org",
@@ -24994,13 +24994,13 @@ async function pollTelegram(config2, state, rateLimiter) {
               },
               (res) => {
                 res.resume();
-                resolve21();
+                resolve22();
               }
             );
-            replyReq.on("error", () => resolve21());
+            replyReq.on("error", () => resolve22());
             replyReq.on("timeout", () => {
               replyReq.destroy();
-              resolve21();
+              resolve22();
             });
             replyReq.write(replyBody);
             replyReq.end();
@@ -25139,13 +25139,13 @@ async function pollLoop() {
         }
       }
       writeDaemonState(state);
-      await new Promise((resolve21) => setTimeout(resolve21, config2.pollIntervalMs));
+      await new Promise((resolve22) => setTimeout(resolve22, config2.pollIntervalMs));
     } catch (error2) {
       state.errors++;
       state.lastError = redactTokens(error2 instanceof Error ? error2.message : String(error2));
       log(`Poll error: ${state.lastError}`);
       writeDaemonState(state);
-      await new Promise((resolve21) => setTimeout(resolve21, config2.pollIntervalMs * 2));
+      await new Promise((resolve22) => setTimeout(resolve22, config2.pollIntervalMs * 2));
     }
   }
   log("Poll loop ended");
@@ -26737,7 +26737,7 @@ async function triggerStopCallbacks(metrics, _input, options = {}) {
   try {
     await Promise.race([
       Promise.allSettled(promises),
-      new Promise((resolve21) => setTimeout(resolve21, 5e3))
+      new Promise((resolve22) => setTimeout(resolve22, 5e3))
     ]);
   } catch (error2) {
     console.error("[stop-callback] Callback execution error:", error2);
@@ -27037,7 +27037,7 @@ async function sendTelegram2(config2, payload) {
       text: payload.message,
       parse_mode: config2.parseMode || "Markdown"
     });
-    const result = await new Promise((resolve21) => {
+    const result = await new Promise((resolve22) => {
       const req = (0, import_https2.request)(
         {
           hostname: "api.telegram.org",
@@ -27064,9 +27064,9 @@ async function sendTelegram2(config2, payload) {
                 }
               } catch {
               }
-              resolve21({ platform: "telegram", success: true, messageId });
+              resolve22({ platform: "telegram", success: true, messageId });
             } else {
-              resolve21({
+              resolve22({
                 platform: "telegram",
                 success: false,
                 error: `HTTP ${res.statusCode}`
@@ -27076,11 +27076,11 @@ async function sendTelegram2(config2, payload) {
         }
       );
       req.on("error", (e) => {
-        resolve21({ platform: "telegram", success: false, error: e.message });
+        resolve22({ platform: "telegram", success: false, error: e.message });
       });
       req.on("timeout", () => {
         req.destroy();
-        resolve21({
+        resolve22({
           platform: "telegram",
           success: false,
           error: "Request timeout"
@@ -27327,9 +27327,9 @@ async function dispatchNotifications(config2, event, payload, platformMessages) 
           }
         )
       ),
-      new Promise((resolve21) => {
+      new Promise((resolve22) => {
         timer = setTimeout(
-          () => resolve21([
+          () => resolve22([
             {
               platform: "unknown",
               success: false,
@@ -28126,7 +28126,7 @@ async function withMailboxLock(teamName, workerName2, cwd2, fn) {
   while (Date.now() < deadline) {
     const result = await withLock(lockDir, fn);
     if (result.ok) return result.value;
-    await new Promise((resolve21) => setTimeout(resolve21, delayMs));
+    await new Promise((resolve22) => setTimeout(resolve22, delayMs));
     delayMs = Math.min(delayMs * 2, 200);
   }
   throw new Error(`Failed to acquire mailbox lock for ${workerName2} after ${timeoutMs}ms`);
@@ -28232,7 +28232,7 @@ async function teamCreateTask(teamName, task, cwd2) {
       return created;
     });
     if (result.ok) return result.value;
-    await new Promise((resolve21) => setTimeout(resolve21, delayMs));
+    await new Promise((resolve22) => setTimeout(resolve22, delayMs));
     delayMs = Math.min(delayMs * 2, 200);
   }
   throw new Error(`Failed to acquire task creation lock for team ${teamName} after ${timeoutMs}ms`);
@@ -28272,7 +28272,7 @@ async function teamUpdateTask(teamName, taskId, updates, cwd2) {
       return merged;
     });
     if (result.ok) return result.value;
-    await new Promise((resolve21) => setTimeout(resolve21, delayMs));
+    await new Promise((resolve22) => setTimeout(resolve22, delayMs));
     delayMs = Math.min(delayMs * 2, 200);
   }
   throw new Error(`Failed to acquire task update lock for task ${taskId} in team ${teamName} after ${timeoutMs}ms`);
@@ -30664,7 +30664,7 @@ async function withDispatchLock(teamName, cwd2, fn) {
         );
       }
       const jitter = 0.5 + Math.random() * 0.5;
-      await new Promise((resolve21) => setTimeout(resolve21, Math.floor(pollMs * jitter)));
+      await new Promise((resolve22) => setTimeout(resolve22, Math.floor(pollMs * jitter)));
       pollMs = Math.min(pollMs * 2, DISPATCH_LOCK_MAX_POLL_MS);
     }
   }
@@ -32840,8 +32840,8 @@ ${dirtyFiles.map((f) => `- \`${f}\``).join("\n")}`;
               return false;
             }
           })(),
-          new Promise((resolve21) => {
-            const t = setTimeout(() => resolve21(false), remaining);
+          new Promise((resolve22) => {
+            const t = setTimeout(() => resolve22(false), remaining);
             if (typeof t.unref === "function") t.unref();
           })
         ]);
@@ -33181,7 +33181,7 @@ async function waitForWorkerStartupEvidence(teamName, workerName2, taskId, cwd2,
       return true;
     }
     if (attempt < attempts) {
-      await new Promise((resolve21) => setTimeout(resolve21, delayMs));
+      await new Promise((resolve22) => setTimeout(resolve22, delayMs));
     }
   }
   return false;
@@ -34692,7 +34692,7 @@ async function readJsonSafe5(filePath) {
         return null;
       }
     }
-    await new Promise((resolve21) => setTimeout(resolve21, 25));
+    await new Promise((resolve22) => setTimeout(resolve22, 25));
   }
   return null;
 }
@@ -34810,7 +34810,7 @@ async function nextPendingTaskIndex(runtime) {
     let task = await readTask(root2, taskId);
     if (!task) {
       for (let attempt = 1; attempt < transientReadRetryAttempts; attempt++) {
-        await new Promise((resolve21) => setTimeout(resolve21, transientReadRetryDelayMs));
+        await new Promise((resolve22) => setTimeout(resolve22, transientReadRetryDelayMs));
         task = await readTask(root2, taskId);
         if (task) break;
       }
@@ -43009,7 +43009,7 @@ function validateCredentials(creds) {
   return !isCredentialExpired(creds);
 }
 function refreshAccessToken(refreshToken) {
-  return new Promise((resolve21) => {
+  return new Promise((resolve22) => {
     const clientId = process.env.CLAUDE_CODE_OAUTH_CLIENT_ID || DEFAULT_OAUTH_CLIENT_ID;
     const body = new URLSearchParams({
       grant_type: "refresh_token",
@@ -43037,7 +43037,7 @@ function refreshAccessToken(refreshToken) {
             try {
               const parsed = JSON.parse(data);
               if (parsed.access_token) {
-                resolve21({
+                resolve22({
                   accessToken: parsed.access_token,
                   refreshToken: parsed.refresh_token || refreshToken,
                   expiresAt: parsed.expires_in ? Date.now() + parsed.expires_in * 1e3 : parsed.expires_at
@@ -43050,20 +43050,20 @@ function refreshAccessToken(refreshToken) {
           if (process.env.OMC_DEBUG) {
             console.error(`[usage-api] Token refresh failed: HTTP ${res.statusCode}`);
           }
-          resolve21(null);
+          resolve22(null);
         });
       }
     );
-    req.on("error", () => resolve21(null));
+    req.on("error", () => resolve22(null));
     req.on("timeout", () => {
       req.destroy();
-      resolve21(null);
+      resolve22(null);
     });
     req.end(body);
   });
 }
 function fetchUsageFromApi(accessToken) {
-  return new Promise((resolve21) => {
+  return new Promise((resolve22) => {
     const req = import_https3.default.request(
       {
         hostname: "api.anthropic.com",
@@ -43084,41 +43084,41 @@ function fetchUsageFromApi(accessToken) {
         res.on("end", () => {
           if (res.statusCode === 200) {
             try {
-              resolve21({ data: JSON.parse(data) });
+              resolve22({ data: JSON.parse(data) });
             } catch {
-              resolve21({ data: null });
+              resolve22({ data: null });
             }
           } else if (res.statusCode === 429) {
             if (process.env.OMC_DEBUG) {
               console.error(`[usage-api] Anthropic API returned 429 (rate limited)`);
             }
-            resolve21({ data: null, rateLimited: true });
+            resolve22({ data: null, rateLimited: true });
           } else {
-            resolve21({ data: null });
+            resolve22({ data: null });
           }
         });
       }
     );
-    req.on("error", () => resolve21({ data: null }));
+    req.on("error", () => resolve22({ data: null }));
     req.on("timeout", () => {
       req.destroy();
-      resolve21({ data: null });
+      resolve22({ data: null });
     });
     req.end();
   });
 }
 function fetchUsageFromZai() {
-  return new Promise((resolve21) => {
+  return new Promise((resolve22) => {
     const baseUrl = process.env.ANTHROPIC_BASE_URL;
     const authToken = process.env.ANTHROPIC_AUTH_TOKEN;
     if (!baseUrl || !authToken) {
-      resolve21({ data: null });
+      resolve22({ data: null });
       return;
     }
     const validation = validateAnthropicBaseUrl(baseUrl);
     if (!validation.allowed) {
       console.error(`[SSRF Guard] Blocking usage API call: ${validation.reason}`);
-      resolve21({ data: null });
+      resolve22({ data: null });
       return;
     }
     try {
@@ -43146,29 +43146,29 @@ function fetchUsageFromZai() {
           res.on("end", () => {
             if (res.statusCode === 200) {
               try {
-                resolve21({ data: JSON.parse(data) });
+                resolve22({ data: JSON.parse(data) });
               } catch {
-                resolve21({ data: null });
+                resolve22({ data: null });
               }
             } else if (res.statusCode === 429) {
               if (process.env.OMC_DEBUG) {
                 console.error(`[usage-api] z.ai API returned 429 (rate limited)`);
               }
-              resolve21({ data: null, rateLimited: true });
+              resolve22({ data: null, rateLimited: true });
             } else {
-              resolve21({ data: null });
+              resolve22({ data: null });
             }
           });
         }
       );
-      req.on("error", () => resolve21({ data: null }));
+      req.on("error", () => resolve22({ data: null }));
       req.on("timeout", () => {
         req.destroy();
-        resolve21({ data: null });
+        resolve22({ data: null });
       });
       req.end();
     } catch {
-      resolve21({ data: null });
+      resolve22({ data: null });
     }
   });
 }
@@ -43335,16 +43335,16 @@ function parseZaiResponse(response) {
   return result;
 }
 function fetchUsageFromMinimax(apiKey) {
-  return new Promise((resolve21) => {
+  return new Promise((resolve22) => {
     const baseUrl = process.env.ANTHROPIC_BASE_URL;
     if (!baseUrl) {
-      resolve21({ data: null });
+      resolve22({ data: null });
       return;
     }
     const validation = validateAnthropicBaseUrl(baseUrl);
     if (!validation.allowed) {
       console.error(`[SSRF Guard] Blocking usage API call: ${validation.reason}`);
-      resolve21({ data: null });
+      resolve22({ data: null });
       return;
     }
     try {
@@ -43371,29 +43371,29 @@ function fetchUsageFromMinimax(apiKey) {
           res.on("end", () => {
             if (res.statusCode === 200) {
               try {
-                resolve21({ data: JSON.parse(data) });
+                resolve22({ data: JSON.parse(data) });
               } catch {
-                resolve21({ data: null });
+                resolve22({ data: null });
               }
             } else if (res.statusCode === 429) {
               if (process.env.OMC_DEBUG) {
                 console.error(`[usage-api] MiniMax API returned 429 (rate limited)`);
               }
-              resolve21({ data: null, rateLimited: true });
+              resolve22({ data: null, rateLimited: true });
             } else {
-              resolve21({ data: null });
+              resolve22({ data: null });
             }
           });
         }
       );
-      req.on("error", () => resolve21({ data: null }));
+      req.on("error", () => resolve22({ data: null }));
       req.on("timeout", () => {
         req.destroy();
-        resolve21({ data: null });
+        resolve22({ data: null });
       });
       req.end();
     } catch {
-      resolve21({ data: null });
+      resolve22({ data: null });
     }
   });
 }
@@ -44536,7 +44536,7 @@ function isCacheValid2(cache) {
   return Date.now() - cache.timestamp < CACHE_TTL_MS2;
 }
 function spawnWithTimeout(cmd, timeoutMs) {
-  return new Promise((resolve21, reject) => {
+  return new Promise((resolve22, reject) => {
     const [executable, ...args] = Array.isArray(cmd) ? cmd : ["sh", "-c", cmd];
     const child = (0, import_child_process35.spawn)(executable, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -44559,7 +44559,7 @@ function spawnWithTimeout(cmd, timeoutMs) {
       clearTimeout(timer);
       if (!timedOut) {
         if (code === 0) {
-          resolve21(stdout);
+          resolve22(stdout);
         } else {
           reject(new Error(`Command exited with code ${code}`));
         }
@@ -45974,6 +45974,124 @@ var init_git = __esm({
   }
 });
 
+// src/hud/elements/multi-repo.ts
+function isGitRepo(dir) {
+  try {
+    (0, import_node_child_process11.execSync)("git rev-parse --show-toplevel", {
+      cwd: dir,
+      encoding: "utf-8",
+      timeout: 1e3,
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: process.platform === "win32" ? "cmd.exe" : void 0
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function looksLikeRepo(entryPath) {
+  return (0, import_node_fs13.existsSync)((0, import_node_path17.join)(entryPath, ".git"));
+}
+function countActiveSessions(cwd2) {
+  const sessionsDir = (0, import_node_path17.join)(getOmcRoot(cwd2), "state", "sessions");
+  if (!(0, import_node_fs13.existsSync)(sessionsDir)) return 0;
+  const ACTIVITY_WINDOW_MS = 30 * 60 * 1e3;
+  const now = Date.now();
+  let active = 0;
+  try {
+    const entries = (0, import_node_fs13.readdirSync)(sessionsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirPath = (0, import_node_path17.join)(sessionsDir, entry.name);
+      try {
+        const dirStat = (0, import_node_fs13.statSync)(dirPath);
+        if (now - dirStat.mtimeMs < ACTIVITY_WINDOW_MS) {
+          active++;
+          continue;
+        }
+        const inner = (0, import_node_fs13.readdirSync)(dirPath);
+        for (const f of inner) {
+          try {
+            const fstat = (0, import_node_fs13.statSync)((0, import_node_path17.join)(dirPath, f));
+            if (now - fstat.mtimeMs < ACTIVITY_WINDOW_MS) {
+              active++;
+              break;
+            }
+          } catch {
+          }
+        }
+      } catch {
+      }
+    }
+  } catch {
+    return 0;
+  }
+  return active;
+}
+function detectMultiRepo(cwd2) {
+  const key = cwd2 ? (0, import_node_path17.resolve)(cwd2) : process.cwd();
+  const cached2 = multiRepoCache.get(key);
+  if (cached2 && Date.now() < cached2.expiresAt) {
+    return cached2.value;
+  }
+  let result = null;
+  try {
+    if (isGitRepo(key)) {
+      multiRepoCache.set(key, { value: null, expiresAt: Date.now() + CACHE_TTL_MS4 });
+      return null;
+    }
+    let subrepoCount = 0;
+    try {
+      const entries = (0, import_node_fs13.readdirSync)(key, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        if (entry.name.startsWith(".")) continue;
+        if (looksLikeRepo((0, import_node_path17.join)(key, entry.name))) subrepoCount++;
+      }
+    } catch {
+    }
+    if (subrepoCount < 2) {
+      multiRepoCache.set(key, { value: null, expiresAt: Date.now() + CACHE_TTL_MS4 });
+      return null;
+    }
+    const hasMarker = (0, import_node_fs13.existsSync)((0, import_node_path17.join)(key, ".omc-workspace"));
+    const activeSessions = hasMarker ? countActiveSessions(key) : 0;
+    result = {
+      isMultiRepo: true,
+      hasMarker,
+      parentName: (0, import_node_path17.basename)(key),
+      subrepoCount,
+      activeSessions
+    };
+  } catch {
+    result = null;
+  }
+  multiRepoCache.set(key, { value: result, expiresAt: Date.now() + CACHE_TTL_MS4 });
+  return result;
+}
+function renderMultiRepo(cwd2) {
+  const info = detectMultiRepo(cwd2);
+  if (!info || !info.isMultiRepo) return null;
+  if (!info.hasMarker) {
+    return yellow("\u26A0 multi-repo detected") + dim(" \u2014 run: ") + cyan(`echo {} > "${info.parentName}/.omc-workspace"`) + dim(" to enable shared state");
+  }
+  const sessionsPart = info.activeSessions > 0 ? ` ${dim("sessions:")}${green(String(info.activeSessions))}` : ` ${dim("sessions:")}${dim("0")}`;
+  return `${dim("mr:")}${cyan(info.parentName)} ${dim("repos:")}${cyan(String(info.subrepoCount))}` + sessionsPart;
+}
+var import_node_child_process11, import_node_fs13, import_node_path17, CACHE_TTL_MS4, multiRepoCache;
+var init_multi_repo = __esm({
+  "src/hud/elements/multi-repo.ts"() {
+    "use strict";
+    import_node_child_process11 = require("node:child_process");
+    import_node_fs13 = require("node:fs");
+    import_node_path17 = require("node:path");
+    init_colors();
+    init_worktree_paths();
+    CACHE_TTL_MS4 = 3e4;
+    multiRepoCache = /* @__PURE__ */ new Map();
+  }
+});
+
 // src/hud/elements/model.ts
 function extractVersion(modelId) {
   const idMatch = modelId.match(/(?:opus|sonnet|haiku)-(\d+)-(\d+)/i);
@@ -46259,17 +46377,22 @@ async function render(context, config2) {
     );
     if (cwdElement) rendered.set("cwd", cwdElement);
   }
-  if (enabledElements.gitRepo) {
-    const gitRepoElement = renderGitRepo(context.cwd);
-    if (gitRepoElement) rendered.set("gitRepo", gitRepoElement);
-  }
-  if (enabledElements.gitBranch) {
-    const gitBranchElement = renderGitBranch(context.cwd);
-    if (gitBranchElement) rendered.set("gitBranch", gitBranchElement);
-  }
-  if (enabledElements.gitStatus) {
-    const gitStatusElement = renderGitStatus(context.cwd, hudLabels);
-    if (gitStatusElement) rendered.set("gitStatus", gitStatusElement);
+  const multiRepoElement = enabledElements.gitRepo ? renderMultiRepo(context.cwd) : null;
+  if (multiRepoElement) {
+    rendered.set("gitRepo", multiRepoElement);
+  } else {
+    if (enabledElements.gitRepo) {
+      const gitRepoElement = renderGitRepo(context.cwd);
+      if (gitRepoElement) rendered.set("gitRepo", gitRepoElement);
+    }
+    if (enabledElements.gitBranch) {
+      const gitBranchElement = renderGitBranch(context.cwd);
+      if (gitBranchElement) rendered.set("gitBranch", gitBranchElement);
+    }
+    if (enabledElements.gitStatus) {
+      const gitStatusElement = renderGitStatus(context.cwd, hudLabels);
+      if (gitStatusElement) rendered.set("gitStatus", gitStatusElement);
+    }
   }
   const modelSource = enabledElements.modelFormat === "full" ? context.modelId ?? context.modelName : context.modelName;
   if (enabledElements.model && modelSource) {
@@ -46552,6 +46675,7 @@ var init_render = __esm({
     init_cwd();
     init_hostname();
     init_git();
+    init_multi_repo();
     init_model();
     init_api_key_source();
     init_call_counts();
@@ -50407,7 +50531,7 @@ var require_compile = __commonJS2((exports2) => {
     const schOrFunc = root2.refs[ref];
     if (schOrFunc)
       return schOrFunc;
-    let _sch = resolve21.call(this, root2, ref);
+    let _sch = resolve22.call(this, root2, ref);
     if (_sch === void 0) {
       const schema = (_a = root2.localRefs) === null || _a === void 0 ? void 0 : _a[ref];
       const { schemaId } = this.opts;
@@ -50434,7 +50558,7 @@ var require_compile = __commonJS2((exports2) => {
   function sameSchemaEnv(s1, s2) {
     return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
   }
-  function resolve21(root2, ref) {
+  function resolve22(root2, ref) {
     let sch;
     while (typeof (sch = this.refs[ref]) == "string")
       ref = sch;
@@ -50932,7 +51056,7 @@ var require_fast_uri = __commonJS2((exports2, module2) => {
     }
     return uri;
   }
-  function resolve21(baseURI, relativeURI, options) {
+  function resolve22(baseURI, relativeURI, options) {
     const schemelessOptions = Object.assign({ scheme: "null" }, options);
     const resolved = resolveComponents(parse62(baseURI, schemelessOptions), parse62(relativeURI, schemelessOptions), schemelessOptions, true);
     return serialize(resolved, { ...schemelessOptions, skipEscape: true });
@@ -51165,7 +51289,7 @@ var require_fast_uri = __commonJS2((exports2, module2) => {
   var fastUri = {
     SCHEMES,
     normalize: normalize12,
-    resolve: resolve21,
+    resolve: resolve22,
     resolveComponents,
     equal,
     serialize,
@@ -65532,7 +65656,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = (_c = (_a = task2.pollInterval) !== null && _a !== void 0 ? _a : (_b = this._options) === null || _b === void 0 ? void 0 : _b.defaultTaskPollInterval) !== null && _c !== void 0 ? _c : 1e3;
-        await new Promise((resolve21) => setTimeout(resolve21, pollInterval));
+        await new Promise((resolve22) => setTimeout(resolve22, pollInterval));
         (_d = options === null || options === void 0 ? void 0 : options.signal) === null || _d === void 0 || _d.throwIfAborted();
       }
     } catch (error2) {
@@ -65544,7 +65668,7 @@ var Protocol = class {
   }
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options !== null && options !== void 0 ? options : {};
-    return new Promise((resolve21, reject) => {
+    return new Promise((resolve22, reject) => {
       var _a, _b, _c, _d, _e, _f, _g;
       const earlyReject = (error2) => {
         reject(error2);
@@ -65625,7 +65749,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve21(parseResult.data);
+            resolve22(parseResult.data);
           }
         } catch (error2) {
           reject(error2);
@@ -65822,12 +65946,12 @@ var Protocol = class {
       }
     } catch (_d) {
     }
-    return new Promise((resolve21, reject) => {
+    return new Promise((resolve22, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve21, interval);
+      const timeoutId = setTimeout(resolve22, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -66626,7 +66750,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = (_a = task.pollInterval) !== null && _a !== void 0 ? _a : 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve21) => setTimeout(resolve21, pollInterval));
+      await new Promise((resolve22) => setTimeout(resolve22, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -71702,7 +71826,7 @@ var LspClient = class _LspClient {
 Install with: ${this.serverConfig.installHint}`
       );
     }
-    return new Promise((resolve21, reject) => {
+    return new Promise((resolve22, reject) => {
       const command = this.devContainerContext ? "docker" : this.serverConfig.command;
       const args = this.devContainerContext ? ["exec", "-i", "-w", this.devContainerContext.containerWorkspaceRoot, this.devContainerContext.containerId, this.serverConfig.command, ...this.serverConfig.args] : this.serverConfig.args;
       this.process = (0, import_child_process4.spawn)(command, args, {
@@ -71729,7 +71853,7 @@ Install with: ${this.serverConfig.installHint}`
       });
       this.initialize().then(() => {
         this.initialized = true;
-        resolve21();
+        resolve22();
       }).catch(reject);
     });
   }
@@ -71873,13 +71997,13 @@ Install with: ${this.serverConfig.installHint}`
     const message = `Content-Length: ${Buffer.byteLength(content)}\r
 \r
 ${content}`;
-    return new Promise((resolve21, reject) => {
+    return new Promise((resolve22, reject) => {
       const timeoutHandle = setTimeout(() => {
         this.pendingRequests.delete(id);
         reject(new Error(`LSP request '${method}' timed out after ${effectiveTimeout}ms`));
       }, effectiveTimeout);
       this.pendingRequests.set(id, {
-        resolve: resolve21,
+        resolve: resolve22,
         reject,
         timeout: timeoutHandle
       });
@@ -71955,7 +72079,7 @@ ${content}`;
       }
     });
     this.openDocuments.add(hostUri);
-    await new Promise((resolve21) => setTimeout(resolve21, 100));
+    await new Promise((resolve22) => setTimeout(resolve22, 100));
   }
   /**
    * Close a document
@@ -72116,13 +72240,13 @@ ${content}`;
     if (this.diagnostics.has(uri)) {
       return Promise.resolve();
     }
-    return new Promise((resolve21) => {
+    return new Promise((resolve22) => {
       let resolved = false;
       const timer = setTimeout(() => {
         if (!resolved) {
           resolved = true;
           this.diagnosticWaiters.delete(uri);
-          resolve21();
+          resolve22();
         }
       }, timeoutMs);
       const existing = this.diagnosticWaiters.get(uri) || [];
@@ -72130,7 +72254,7 @@ ${content}`;
         if (!resolved) {
           resolved = true;
           clearTimeout(timer);
-          resolve21();
+          resolve22();
         }
       });
       this.diagnosticWaiters.set(uri, existing);
@@ -74060,7 +74184,7 @@ var SessionLock = class {
   }
 };
 function sleep(ms) {
-  return new Promise((resolve21) => setTimeout(resolve21, ms));
+  return new Promise((resolve22) => setTimeout(resolve22, ms));
 }
 
 // src/tools/python-repl/socket-client.ts
@@ -74090,7 +74214,7 @@ var JsonRpcError = class extends Error {
   }
 };
 async function sendSocketRequest(socketPath, method, params, timeout = 6e4) {
-  return new Promise((resolve21, reject) => {
+  return new Promise((resolve22, reject) => {
     const id = (0, import_crypto5.randomUUID)();
     const request = {
       jsonrpc: "2.0",
@@ -74180,7 +74304,7 @@ async function sendSocketRequest(socketPath, method, params, timeout = 6e4) {
           }
           if (!settled) {
             settled = true;
-            resolve21(response.result);
+            resolve22(response.result);
           }
         } catch (e) {
           if (!settled) {
@@ -76789,7 +76913,7 @@ function mergeArrays(fieldName, base, incoming) {
       return mergeScalarArray(base, incoming);
   }
 }
-function mergeByKey(base, incoming, keyFn, resolve21) {
+function mergeByKey(base, incoming, keyFn, resolve22) {
   const seen = /* @__PURE__ */ new Map();
   for (const item of base) {
     seen.set(keyFn(item), item);
@@ -76798,7 +76922,7 @@ function mergeByKey(base, incoming, keyFn, resolve21) {
     const key = keyFn(item);
     const existing = seen.get(key);
     if (existing) {
-      seen.set(key, resolve21(existing, item));
+      seen.set(key, resolve22(existing, item));
     } else {
       seen.set(key, item);
     }
@@ -86452,7 +86576,7 @@ async function pollLoop2(config2) {
       log2(`Poll error: ${state.lastError}`, config2);
       writeDaemonState2(state, config2);
     }
-    await new Promise((resolve21) => setTimeout(resolve21, config2.pollIntervalMs));
+    await new Promise((resolve22) => setTimeout(resolve22, config2.pollIntervalMs));
   }
 }
 function startDaemon(config2) {
@@ -89938,7 +90062,7 @@ async function ralphthonCommand(args) {
   console.log(source_default.gray("Orchestrator running. Press Ctrl+C to stop."));
 }
 function sleep5(ms) {
-  return new Promise((resolve21) => setTimeout(resolve21, ms));
+  return new Promise((resolve22) => setTimeout(resolve22, ms));
 }
 
 // src/cli/commands/ultragoal.ts
@@ -92437,15 +92561,15 @@ async function runHudWatchLoop(options) {
     if (shouldStop) {
       break;
     }
-    await new Promise((resolve21) => {
+    await new Promise((resolve22) => {
       const timer = setTimeout(() => {
         wakeSleep = null;
-        resolve21();
+        resolve22();
       }, options.intervalMs);
       wakeSleep = () => {
         clearTimeout(timer);
         wakeSleep = null;
-        resolve21();
+        resolve22();
       };
       timer.unref?.();
     });

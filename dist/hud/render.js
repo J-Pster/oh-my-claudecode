@@ -25,6 +25,7 @@ import { renderAutopilot } from "./elements/autopilot.js";
 import { renderCwd } from "./elements/cwd.js";
 import { renderHostname } from "./elements/hostname.js";
 import { renderGitRepo, renderGitBranch, renderGitStatus } from "./elements/git.js";
+import { renderMultiRepo } from "./elements/multi-repo.js";
 import { renderModel } from "./elements/model.js";
 import { renderApiKeySource } from "./elements/api-key-source.js";
 import { renderCallCounts } from "./elements/call-counts.js";
@@ -201,20 +202,31 @@ export async function render(context, config) {
         if (cwdElement)
             rendered.set("cwd", cwdElement);
     }
-    if (enabledElements.gitRepo) {
-        const gitRepoElement = renderGitRepo(context.cwd);
-        if (gitRepoElement)
-            rendered.set("gitRepo", gitRepoElement);
+    // Multi-repo parent dir: replace the per-repo chips with a single
+    // workspace summary. When cwd is itself a git repo, renderMultiRepo
+    // returns null and the normal git elements take over.
+    const multiRepoElement = enabledElements.gitRepo
+        ? renderMultiRepo(context.cwd)
+        : null;
+    if (multiRepoElement) {
+        rendered.set("gitRepo", multiRepoElement);
     }
-    if (enabledElements.gitBranch) {
-        const gitBranchElement = renderGitBranch(context.cwd);
-        if (gitBranchElement)
-            rendered.set("gitBranch", gitBranchElement);
-    }
-    if (enabledElements.gitStatus) {
-        const gitStatusElement = renderGitStatus(context.cwd, hudLabels);
-        if (gitStatusElement)
-            rendered.set("gitStatus", gitStatusElement);
+    else {
+        if (enabledElements.gitRepo) {
+            const gitRepoElement = renderGitRepo(context.cwd);
+            if (gitRepoElement)
+                rendered.set("gitRepo", gitRepoElement);
+        }
+        if (enabledElements.gitBranch) {
+            const gitBranchElement = renderGitBranch(context.cwd);
+            if (gitBranchElement)
+                rendered.set("gitBranch", gitBranchElement);
+        }
+        if (enabledElements.gitStatus) {
+            const gitStatusElement = renderGitStatus(context.cwd, hudLabels);
+            if (gitStatusElement)
+                rendered.set("gitStatus", gitStatusElement);
+        }
     }
     const modelSource = enabledElements.modelFormat === 'full'
         ? context.modelId ?? context.modelName

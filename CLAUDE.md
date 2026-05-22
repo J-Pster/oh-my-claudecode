@@ -63,6 +63,7 @@ Broad requests: explore first, then plan. 2+ independent tasks in parallel. `run
 Keep authoring and review as separate passes: writer pass creates or revises content, reviewer/verifier pass evaluates it later in a separate lane.
 Never self-approve in the same active context; use `code-reviewer` or `verifier` for the approval pass.
 Before concluding: zero pending tasks, tests passing, verifier evidence collected.
+Local OMC fork: edits to `src/**/*.ts` require `npm run build` before they show up in the running Claude Code plugin (it loads `dist/`, not `src/`). After editing TS, surface a one-line reminder per editing round — see `skills/local-build-reminder/SKILL.md`. `.mjs`/`.cjs`/`.md` files load from disk; no build needed.
 </execution_protocols>
 
 <commit_protocol>

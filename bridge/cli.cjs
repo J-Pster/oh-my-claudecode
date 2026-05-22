@@ -8832,6 +8832,7 @@ function isRuntimePackageLocal() {
     }
     if (!pkgRoot) return false;
     if ((0, import_fs33.existsSync)((0, import_path45.join)(pkgRoot, ".git"))) return true;
+    if ((0, import_fs33.existsSync)((0, import_path45.join)(pkgRoot, "src"))) return true;
     try {
       const real = (0, import_fs33.realpathSync)(pkgRoot);
       const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "");

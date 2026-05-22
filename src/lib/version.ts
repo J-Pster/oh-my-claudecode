@@ -51,12 +51,16 @@ export function getRuntimePackageVersion(): string {
 
 /**
  * Detect whether OMC is running from a local fork / dev install rather
- * than from the npm-published package or the Claude Code plugin cache.
+ * than from the npm-published package.
  *
  * Signals (any one triggers "local"):
+ *  - A `.git/` directory exists at the package root (dev clone)
  *  - The resolved package directory is reached via a symlink/junction
  *    (e.g. `npm link`, or a manual junction in `~/.claude/plugins/marketplaces/`)
- *  - A `.git/` directory exists at the package root (dev clone)
+ *  - A `src/` directory exists at the package root — the npm-published
+ *    package ships only `dist/`. The presence of `src/` proves the
+ *    payload came from a fork (e.g. Claude Code's plugin cache copied
+ *    the full repo through a marketplace junction).
  *
  * Used by the HUD to append an "L" suffix to the version tag, so users
  * can tell at a glance whether their changes are live.
@@ -83,10 +87,12 @@ export function isRuntimePackageLocal(): boolean {
     // Signal 1: a .git/ directory at package root means dev clone
     if (existsSync(join(pkgRoot, '.git'))) return true;
 
-    // Signal 2: realpath differs from the path we walked to — the package
+    // Signal 2: a src/ directory at the package root means the payload
+    // came from a fork — the npm-published package only ships dist/.
+    if (existsSync(join(pkgRoot, 'src'))) return true;
+
+    // Signal 3: realpath differs from the path we walked to — the package
     // was reached via a symlink or junction (`npm link`, manual junction).
-    // Compare the parent (the npm install dir) since lstat on `pkgRoot`
-    // itself only catches when pkgRoot IS the junction target.
     try {
       const real = realpathSync(pkgRoot);
       // Normalize separators for cross-platform comparison
@@ -96,7 +102,7 @@ export function isRuntimePackageLocal(): boolean {
       // realpath failure — fall through
     }
 
-    // Signal 2b: check ancestors for symlink/junction (covers cases where
+    // Signal 3b: check ancestors for symlink/junction (covers cases where
     // a parent dir like ~/.claude/plugins/marketplaces/omc is the junction).
     let cursor = pkgRoot;
     for (let i = 0; i < 6; i++) {

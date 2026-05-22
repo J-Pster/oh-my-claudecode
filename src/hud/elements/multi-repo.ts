@@ -15,38 +15,35 @@
  */
 
 import { execSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, statSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { cyan, dim, green, yellow } from '../colors.js';
 import { getOmcRoot } from '../../lib/worktree-paths.js';
 
-interface SessionMeta {
-  pid?: number;
-  startedAt?: string;
-  platform?: string;
-}
+/**
+ * Liveness window for the session counter. A session dir whose
+ * mtime (or any file inside) is within this window counts as active.
+ *
+ * 5 minutes balances responsiveness (a closed Claude Code drops off
+ * quickly) with tolerance for short user idleness between tool calls.
+ * Claude Code fires hooks on every tool invocation and writes hud
+ * state on every render, so any active session keeps the dir mtime
+ * fresh well inside this window.
+ *
+ * PID-based liveness is intentionally NOT used: installed hooks run
+ * through scripts/run.cjs, whose short-lived process exits as soon
+ * as the hook returns — see scripts/session-start.mjs:104.
+ */
+const ACTIVITY_WINDOW_MS = 5 * 60 * 1000;
 
-function isPidAlive(pid: number): boolean {
-  if (!Number.isInteger(pid) || pid <= 0) return false;
-  try {
-    // Signal 0 throws if the process does not exist or is unreachable.
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function readSessionMeta(sessionDir: string): SessionMeta | null {
-  const metaPath = join(sessionDir, '_session-meta.json');
-  if (!existsSync(metaPath)) return null;
-  try {
-    const raw = readFileSync(metaPath, 'utf-8');
-    return JSON.parse(raw) as SessionMeta;
-  } catch {
-    return null;
-  }
-}
+/**
+ * Claude Code session IDs are UUIDs. Anchor on this to filter out
+ * unrelated subdirectories without depending on any specific marker
+ * file (different hooks may or may not have run yet for a given
+ * session — e.g. session-started.json is missing if the session-start
+ * hook crashed or the user is on an older install).
+ */
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const CACHE_TTL_MS = 30_000;
 
@@ -92,9 +89,17 @@ function looksLikeRepo(entryPath: string): boolean {
 
 /**
  * Count session directories under `<cwd>/.omc/state/sessions/`.
- * A session is "active" if any file under it was modified within the
- * last 30 minutes. Cheap heuristic — stale dirs from past runs are
- * filtered out so the HUD reflects what's actually live.
+ *
+ * A session is "active" when both:
+ *  1. The directory name matches a Claude Code session UUID — filters
+ *     out unrelated subdirectories without depending on any specific
+ *     marker file.
+ *  2. The dir mtime — or any file inside, as a fallback for FS that
+ *     don't bubble child mtime — is within ACTIVITY_WINDOW_MS.
+ *
+ * This relies on Claude Code firing hooks on every tool call (and
+ * writing hud state on every render), which keeps mtime fresh while
+ * the user is interacting with the session.
  */
 function countActiveSessions(cwd: string): number {
   // cwd here is verified to be the workspace anchor (marker present),
@@ -103,18 +108,34 @@ function countActiveSessions(cwd: string): number {
   const sessionsDir = join(getOmcRoot(cwd), 'state', 'sessions');
   if (!existsSync(sessionsDir)) return 0;
 
-  // Authoritative: PID liveness via _session-meta.json. A session dir
-  // without a meta file is not counted — every active session is
-  // expected to have been opened by a session-start hook that wrote
-  // the marker.
+  const now = Date.now();
   let active = 0;
   try {
     const entries = readdirSync(sessionsDir, { withFileTypes: true });
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
-      const meta = readSessionMeta(join(sessionsDir, entry.name));
-      if (!meta || typeof meta.pid !== 'number') continue;
-      if (isPidAlive(meta.pid)) active++;
+      if (!SESSION_ID_PATTERN.test(entry.name)) continue;
+
+      const dirPath = join(sessionsDir, entry.name);
+      let fresh = false;
+      try {
+        if (now - statSync(dirPath).mtimeMs < ACTIVITY_WINDOW_MS) {
+          fresh = true;
+        } else {
+          // Fallback: parent mtime may not reflect child writes on
+          // some filesystems. Scan immediate children.
+          for (const f of readdirSync(dirPath)) {
+            try {
+              if (now - statSync(join(dirPath, f)).mtimeMs < ACTIVITY_WINDOW_MS) {
+                fresh = true;
+                break;
+              }
+            } catch { /* skip */ }
+          }
+        }
+      } catch { /* skip */ }
+
+      if (fresh) active++;
     }
   } catch {
     return 0;
@@ -203,8 +224,10 @@ export function renderMultiRepo(cwd?: string): string | null {
     );
   }
 
-  // ~ prefix signals the count is best-effort: new sessions use PID
-  // liveness (accurate), legacy sessions fall back to mtime (heuristic).
+  // ~ prefix signals "best-effort": liveness is inferred from mtime
+  // within a 5-min window, not from a process check. An idle session
+  // (no tool calls for >5 min) will drop off; a freshly closed one
+  // will linger until the window expires.
   const sessionsPart =
     info.activeSessions > 0
       ? ` ${dim('sessions:~')}${green(String(info.activeSessions))}`

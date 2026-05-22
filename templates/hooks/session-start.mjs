@@ -546,29 +546,6 @@ async function main() {
       } catch { /* non-fatal */ }
     }
 
-
-    // PID liveness marker for the HUD's multi-repo session counter.
-    // We record the PARENT pid (Claude Code itself), since this hook is a
-    // short-lived subprocess that exits in seconds. The HUD then uses
-    // process.kill(pid, 0) to confirm the session is still alive without
-    // any further writes.
-    if (sessionId && SESSION_ID_ALLOWLIST.test(sessionId)) {
-      try {
-        const omcRoot = await resolveOmcStateRoot(directory);
-        const sessionDir = join(omcRoot, 'state', 'sessions', sessionId);
-        mkdirSync(sessionDir, { recursive: true });
-        writeFileSync(
-          join(sessionDir, '_session-meta.json'),
-          JSON.stringify({
-            pid: process.ppid,
-            startedAt: new Date().toISOString(),
-            platform: process.platform,
-            cwd: directory,
-          }),
-        );
-      } catch { /* non-fatal */ }
-    }
-
     const updateInfo = currentVersion ? await checkForUpdates(currentVersion) : null;
     if (updateInfo) {
       // Read config to check autoUpgradePrompt preference

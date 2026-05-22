@@ -5,6 +5,7 @@
  */
 import { DEFAULT_HUD_CONFIG, DEFAULT_ELEMENT_ORDER, DEFAULT_HUD_LABELS } from "./types.js";
 import { bold, dim } from "./colors.js";
+import { isRuntimePackageLocal } from "../lib/version.js";
 import { stringWidth, getCharWidth } from "../utils/string-width.js";
 import { renderRalph } from "./elements/ralph.js";
 import { renderAgentsByFormat, renderAgentsMultiLine, } from "./elements/agents.js";
@@ -233,7 +234,10 @@ export async function render(context, config) {
     }
     // -- main-group elements (default: main statusline) --
     if (enabledElements.omcLabel) {
-        const versionTag = context.omcVersion ? `#${context.omcVersion}` : "";
+        const localSuffix = isRuntimePackageLocal() ? "L" : "";
+        const versionTag = context.omcVersion
+            ? `#${context.omcVersion}${localSuffix}`
+            : (localSuffix ? `#${localSuffix}` : "");
         if (context.updateAvailable) {
             rendered.set("omcLabel", bold(`[OMC${versionTag}] -> ${context.updateAvailable} omc update`));
         }

@@ -8818,6 +8818,40 @@ function getRuntimePackageVersion() {
   }
   return "unknown";
 }
+function isRuntimePackageLocal() {
+  try {
+    const __filename4 = (0, import_url8.fileURLToPath)(importMetaUrl);
+    const __dirname2 = (0, import_path45.dirname)(__filename4);
+    let pkgRoot = null;
+    for (let i = 0; i < 5; i++) {
+      const candidate = (0, import_path45.join)(__dirname2, ...Array(i + 1).fill(".."));
+      if ((0, import_fs33.existsSync)((0, import_path45.join)(candidate, "package.json"))) {
+        pkgRoot = candidate;
+        break;
+      }
+    }
+    if (!pkgRoot) return false;
+    if ((0, import_fs33.existsSync)((0, import_path45.join)(pkgRoot, ".git"))) return true;
+    try {
+      const real = (0, import_fs33.realpathSync)(pkgRoot);
+      const norm = (p) => p.replace(/\\/g, "/").replace(/\/+$/, "");
+      if (norm(real) !== norm(pkgRoot)) return true;
+    } catch {
+    }
+    let cursor = pkgRoot;
+    for (let i = 0; i < 6; i++) {
+      const parent = (0, import_path45.dirname)(cursor);
+      if (parent === cursor) break;
+      try {
+        if ((0, import_fs33.lstatSync)(cursor).isSymbolicLink()) return true;
+      } catch {
+      }
+      cursor = parent;
+    }
+  } catch {
+  }
+  return false;
+}
 var import_fs33, import_path45, import_url8;
 var init_version = __esm({
   "src/lib/version.ts"() {
@@ -46254,7 +46288,8 @@ async function render(context, config2) {
     rendered.set("profile", bold(`profile:${context.profileName}`));
   }
   if (enabledElements.omcLabel) {
-    const versionTag = context.omcVersion ? `#${context.omcVersion}` : "";
+    const localSuffix = isRuntimePackageLocal() ? "L" : "";
+    const versionTag = context.omcVersion ? `#${context.omcVersion}${localSuffix}` : localSuffix ? `#${localSuffix}` : "";
     if (context.updateAvailable) {
       rendered.set(
         "omcLabel",
@@ -46497,6 +46532,7 @@ var init_render = __esm({
     "use strict";
     init_types4();
     init_colors();
+    init_version();
     init_string_width();
     init_ralph2();
     init_agents();

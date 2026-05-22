@@ -3,7 +3,7 @@
  * Single source of truth for package version at runtime.
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync, lstatSync, realpathSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -47,4 +47,70 @@ export function getRuntimePackageVersion(): string {
   }
 
   return 'unknown';
+}
+
+/**
+ * Detect whether OMC is running from a local fork / dev install rather
+ * than from the npm-published package or the Claude Code plugin cache.
+ *
+ * Signals (any one triggers "local"):
+ *  - The resolved package directory is reached via a symlink/junction
+ *    (e.g. `npm link`, or a manual junction in `~/.claude/plugins/marketplaces/`)
+ *  - A `.git/` directory exists at the package root (dev clone)
+ *
+ * Used by the HUD to append an "L" suffix to the version tag, so users
+ * can tell at a glance whether their changes are live.
+ *
+ * Returns false on any error — the indicator is informational and must
+ * never block rendering.
+ */
+export function isRuntimePackageLocal(): boolean {
+  try {
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+
+    // Walk up to find the package root (the dir containing package.json)
+    let pkgRoot: string | null = null;
+    for (let i = 0; i < 5; i++) {
+      const candidate = join(__dirname, ...Array(i + 1).fill('..'));
+      if (existsSync(join(candidate, 'package.json'))) {
+        pkgRoot = candidate;
+        break;
+      }
+    }
+    if (!pkgRoot) return false;
+
+    // Signal 1: a .git/ directory at package root means dev clone
+    if (existsSync(join(pkgRoot, '.git'))) return true;
+
+    // Signal 2: realpath differs from the path we walked to — the package
+    // was reached via a symlink or junction (`npm link`, manual junction).
+    // Compare the parent (the npm install dir) since lstat on `pkgRoot`
+    // itself only catches when pkgRoot IS the junction target.
+    try {
+      const real = realpathSync(pkgRoot);
+      // Normalize separators for cross-platform comparison
+      const norm = (p: string) => p.replace(/\\/g, '/').replace(/\/+$/, '');
+      if (norm(real) !== norm(pkgRoot)) return true;
+    } catch {
+      // realpath failure — fall through
+    }
+
+    // Signal 2b: check ancestors for symlink/junction (covers cases where
+    // a parent dir like ~/.claude/plugins/marketplaces/omc is the junction).
+    let cursor = pkgRoot;
+    for (let i = 0; i < 6; i++) {
+      const parent = dirname(cursor);
+      if (parent === cursor) break;
+      try {
+        if (lstatSync(cursor).isSymbolicLink()) return true;
+      } catch {
+        // ignore
+      }
+      cursor = parent;
+    }
+  } catch {
+    // Any failure — treat as not local
+  }
+  return false;
 }

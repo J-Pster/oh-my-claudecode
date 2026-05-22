@@ -371,6 +371,29 @@ ${priorityContext}
 
 const STALE_STATE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
 
+/**
+ * Validate that a candidate cwd is a real OMC workspace anchor.
+ * Returns the candidate unchanged if it is non-empty AND contains a
+ * `.omc-workspace` marker OR a `.git` directory.
+ * Otherwise emits a one-line warning to stderr and returns null,
+ * signalling the caller to skip all state mutations.
+ */
+function validateCwd(candidate) {
+  if (!candidate || typeof candidate !== 'string') {
+    process.stderr.write(
+      `[OMC] session-start: refusing to use cwd '${candidate}' as workspace anchor (no .omc-workspace or .git marker)\n`
+    );
+    return null;
+  }
+  if (existsSync(join(candidate, '.omc-workspace')) || existsSync(join(candidate, '.git'))) {
+    return candidate;
+  }
+  process.stderr.write(
+    `[OMC] session-start: refusing to use cwd '${candidate}' as workspace anchor (no .omc-workspace or .git marker)\n`
+  );
+  return null;
+}
+
 function normalizePath(p) {
   if (!p || typeof p !== 'string') return '';
   let normalized = resolve(p);
@@ -395,11 +418,31 @@ function isFreshActiveState(state) {
   return (Date.now() - recencyMs) <= STALE_STATE_THRESHOLD_MS;
 }
 
+function isOwnerProcessAlive(state) {
+  const pid = state && typeof state.owner_pid === 'number' ? state.owner_pid : null;
+  // Unknown PID → backwards-compat: assume alive (current behavior).
+  if (pid === null || pid <= 0) return true;
+  if (pid === process.pid) return true;
+  try {
+    // Signal 0 probes liveness without affecting the process.
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    // ESRCH = no such process → owner is dead, safe to reclaim.
+    if (err && err.code === 'ESRCH') return false;
+    // EPERM = owned by a different user → can't tell, assume alive.
+    return true;
+  }
+}
+
 function hasConflictingUltraworkRestore(state, sessionId, directory, source) {
   if (!sessionId || !isFreshActiveState(state)) return false;
   if (typeof state.session_id !== 'string' || !state.session_id || state.session_id === sessionId) {
     return false;
   }
+  // Recorded owner PID is dead → the state file is orphaned, not a real
+  // parallel-session conflict. Allow the current session to reclaim it.
+  if (!isOwnerProcessAlive(state)) return false;
 
   if (source === 'global') {
     if (typeof state.project_path !== 'string' || !state.project_path) {
@@ -461,7 +504,12 @@ async function main() {
     let data = {};
     try { data = JSON.parse(input); } catch {}
 
-    const directory = data.cwd || data.directory || process.cwd();
+    const rawDirectory = data.cwd || data.directory || process.cwd();
+    const directory = validateCwd(rawDirectory);
+    if (directory === null) {
+      console.log(JSON.stringify({ continue: true }));
+      return;
+    }
     const sessionId = data.sessionId || data.session_id || data.sessionid || '';
     const messages = [];
 

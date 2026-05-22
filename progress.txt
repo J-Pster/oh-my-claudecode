@@ -1,0 +1,36 @@
+# Wave A — Multi-Repo Workspace 100%
+
+## Stories completed (7/7)
+
+- US-A1: Branded ReadPath/WritePath + SessionStatePaths struct + sibling `resolveSessionStatePaths()` in src/lib/worktree-paths.ts.
+- US-A2: src/lib/session-id.ts + src/lib/__tests__/session-id.test.ts (12 tests, all pass).
+- US-A3: mission-state.json migrated via src/hud/mission-board.ts. Lock + opt-in copy-on-write via OMC_MIGRATE_LEGACY_STATE=1. Integration test for session isolation.
+- US-A4: scripts/post-tool-use-failure.mjs + templates/hooks/post-tool-use-failure.mjs — inline session-scoped path + inline lock (O_EXCL sentinel + PID + stale check).
+- US-A5: src/hooks/subagent-tracker/index.ts migrated to resolveSessionStatePaths + withFileLockSync. tests/perf/subagent-lock.bench.ts measures p99 (Windows p99 ~3.0–3.7ms; under 8ms Linux budget).
+- US-A6: ESLint no-restricted-syntax rule banning ReadPath/WritePath casts outside worktree-paths.ts; src/lib/__tests__/session-state-paths.type-test.ts proves brand enforcement.
+- US-A7: Full regression — 176 passed, 12 pre-existing Windows tmpdir failures (carved out), 1 skipped (Linux-only assert).
+
+## Files changed
+
+- src/lib/worktree-paths.ts (struct + branded types + isLegacyStateMigrationEnabled)
+- src/lib/session-id.ts (new)
+- src/lib/__tests__/session-id.test.ts (new)
+- src/lib/__tests__/session-state-paths.type-test.ts (new)
+- src/hud/mission-board.ts (migration + lock + integration test)
+- src/__tests__/hud/mission-board-state.test.ts (updated + integration)
+- scripts/post-tool-use-failure.mjs + templates/hooks/post-tool-use-failure.mjs (session-scoped + lock)
+- src/__tests__/post-tool-use-failure.test.ts (5 new tests)
+- src/hooks/persistent-mode/__tests__/tool-error.test.ts (cross-platform path fix)
+- src/hooks/subagent-tracker/index.ts (full migration)
+- src/hooks/subagent-tracker/__tests__/session-isolation.test.ts (new)
+- tests/perf/subagent-lock.bench.ts (new)
+- vitest.config.ts (include tests/**/*.bench.ts)
+- eslint.config.js (no-restricted-syntax for ReadPath/WritePath casts)
+
+## Patterns to remember
+
+- New session-scoped state: ALWAYS use `resolveSessionStatePaths('name', sessionId, dir)` and read `paths.effectiveRead` / write `paths.effectiveWrite`. Branded types prevent silent swaps.
+- New hooks reading session_id: use `resolveSessionId({ context: 'hook', hookPayload: input })` — payload wins.
+- New CLI commands reading session_id: use `resolveSessionId({ context: 'cli' })` — env wins.
+- Hot-path writes (per tool call): keep `withFileLockSync` scope minimal (read+update+write only); skip lock for best-effort external ops.
+- Opt-in migration via OMC_MIGRATE_LEGACY_STATE=1 — never copy by default.

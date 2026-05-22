@@ -8,6 +8,7 @@
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'fs';
 import { dirname, join, resolve } from 'path';
+import { homedir } from 'os';
 import { execSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { getClaudeConfigDir } from './lib/config-dir.mjs';
@@ -332,6 +333,67 @@ function getQuietLevel() {
   if (Number.isNaN(parsed)) return 0;
   return Math.max(0, parsed);
 }
+
+/**
+ * Resolve the .omc root directory for a given starting directory.
+ *
+ * Resolution order (mirrors src/lib/worktree-paths.ts getOmcRoot):
+ *   1) OMC_STATE_DIR env — log a warning and fall through (full project-id
+ *      derivation lives in the TS layer; use resolveOmcStateRoot() for async
+ *      TS-backed OMC_STATE_DIR support in main()).
+ *   2) Walk up from startDir looking for a .omc-workspace marker file.
+ *      The first directory containing that file is the workspace anchor.
+ *   3) git rev-parse --show-toplevel from startDir.
+ *   4) Fallback to startDir itself.
+ *
+ * @param {string} startDir - Directory to resolve from (usually cwd from hook payload)
+ * @returns {string} Absolute path to the .omc root directory
+ */
+function resolveOmcRoot(startDir) {
+  const dir = startDir || process.cwd();
+
+  // 1) OMC_STATE_DIR: full project-id derivation is TS-only; warn and fall through.
+  if (process.env.OMC_STATE_DIR) {
+    process.stderr.write(
+      '[omc] OMC_STATE_DIR is set; resolveOmcRoot() falling through to workspace-marker ' +
+      'resolution. Use resolveOmcStateRoot() for full OMC_STATE_DIR support.\n'
+    );
+  }
+
+  // 2) Walk up looking for .omc-workspace marker
+  try {
+    let cursor = resolve(dir);
+    const home = (() => { try { return resolve(homedir()); } catch { return null; } })();
+    while (true) {
+      if (existsSync(join(cursor, '.omc-workspace'))) {
+        return join(cursor, '.omc');
+      }
+      const parent = dirname(cursor);
+      if (parent === cursor) break;
+      if (home && cursor === home) break;
+      cursor = parent;
+    }
+  } catch {
+    // walk failed — continue to git fallback
+  }
+
+  // 3) git rev-parse --show-toplevel
+  try {
+    const top = execSync('git rev-parse --show-toplevel', {
+      cwd: dir,
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 5000,
+    }).trim();
+    if (top) return join(top, '.omc');
+  } catch {
+    // not in a git repo — fall through
+  }
+
+  // 4) Fallback to startDir
+  return join(dir, '.omc');
+}
+
 
 /**
  * Resolve transcript path in worktree environments.

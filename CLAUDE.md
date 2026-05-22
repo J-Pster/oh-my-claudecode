@@ -107,6 +107,7 @@ Kill switches: `DISABLE_OMC`, `OMC_SKIP_HOOKS` (comma-separated).
 
 <worktree_paths>
 State: `.omc/state/`, `.omc/state/sessions/{sessionId}/`, `.omc/notepad.md`, `.omc/project-memory.json`, `.omc/plans/`, `.omc/research/`, `.omc/logs/`
+Multi-repo: drop a `.omc-workspace` marker at a non-git parent dir to anchor `.omc/` there. Resolution: `OMC_STATE_DIR > .omc-workspace > git > cwd`. The session-start hook uses PID-aware liveness — a dead owner session no longer suppresses state restore. State paths use the canonical `resolveSessionStatePaths()` (branded `ReadPath`/`WritePath`) — see `docs/REFERENCE.md`.
 </worktree_paths>
 
 ## Setup

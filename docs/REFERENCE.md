@@ -125,6 +125,74 @@ This resolves to `~/.claude/omc/{project-identifier}/` where the project identif
 
 If both a legacy `{worktree}/.omc/` directory and a centralized directory exist, OMC logs a notice and uses the centralized directory. You can then migrate data from the legacy directory and remove it.
 
+#### Multi-repo workspaces with `.omc-workspace`
+
+When you have several independent git repos under one parent directory and the parent itself is **not** a git repo, OMC cannot infer a shared root via `git rev-parse --show-toplevel`. Each sub-repo would get its own isolated `.omc/`. To anchor a single `.omc/` at the parent, drop a `.omc-workspace` marker file there:
+
+```bash
+cd /path/to/my-workspace            # parent dir (not a git repo)
+echo '{}' > .omc-workspace          # empty JSON is fine
+```
+
+From any sub-directory (including inside any sub-git-repo), OMC resolves `.omc/` to `/path/to/my-workspace/.omc/`. The marker may also carry an explicit project identifier so all sessions share state regardless of the parent dir name:
+
+```json
+{ "id": "my-org-bidchex" }
+```
+
+Resolution order inside `getOmcRoot()`:
+
+1. `OMC_STATE_DIR` (centralized).
+2. `.omc-workspace` marker (multi-repo workspace).
+3. `git rev-parse --show-toplevel` (monorepo / single repo).
+4. `process.cwd()` (last resort).
+
+Once a workspace is anchored, multiple Claude Code sessions in different sub-repos can run `/ultragoal`, `/ralph`, `/ultrawork`, `/autopilot` in parallel without bleeding state. For `/ultragoal` specifically, pass `--plan-id <id>` or `--auto-plan-id` on `create-goals` so each session writes to `.omc/ultragoal/plans/{planId}/` instead of the shared `goals.json` — see "ultragoal multi-plan" below. The PARALLEL SESSION WARNING in `session-start.mjs` performs a PID-aware liveness check and no longer suppresses restore when the owner session is dead.
+
+#### `.omc/handoffs/` shared contract
+
+`.omc/handoffs/` is intentionally **shared across team runs** by design. Its purpose is inter-session message passing: team stage handoffs (plan → prd → exec → verify) accumulate here so a later `team` run can resume from the last non-terminal stage without losing decision history.
+
+**Only the `team` skill writes to `.omc/handoffs/`.** All other code that reads the directory does so read-only. This is enforced by the lint test `tests/lint/handoffs-writers.test.ts`, which scans `src/**` and `templates/**` and fails if any file outside `src/team/` or `src/hooks/team-pipeline/` references `handoffs/` as a write target.
+
+- Handoff files survive `TeamDelete` and session cancellation intentionally — they are post-mortem artifacts.
+- Do **not** session-scope `.omc/handoffs/` unless the `team` skill explicitly evolves to per-session inboxes (tracked as a follow-up in the ADR).
+
+#### Branded path types (`ReadPath` / `WritePath`)
+
+State-file path resolution returns a branded struct from `resolveSessionStatePaths()` in `src/lib/worktree-paths.ts`:
+
+```ts
+interface SessionStatePaths {
+  sessionScoped: string;
+  legacy: string;
+  effectiveRead: ReadPath;   // string & { __brand: 'ReadPath' }
+  effectiveWrite: WritePath; // string & { __brand: 'WritePath' }
+}
+```
+
+The brand prevents a hook from silently passing a read-fallback path to a writer (or vice versa) — TypeScript rejects the cross-assignment at compile time. The only legitimate producer of the brand is `resolveSessionStatePaths()` itself; an ESLint `no-restricted-syntax` rule in `eslint.config.js` blocks `as ReadPath` / `as WritePath` casts anywhere outside `worktree-paths.ts` and its tests. Compile-time regression guard at `src/lib/__tests__/session-state-paths.type-test.ts`.
+
+#### Ultragoal multi-plan layout
+
+Default layout (single plan, monorepo / single session):
+
+```
+.omc/ultragoal/brief.md
+.omc/ultragoal/goals.json
+.omc/ultragoal/ledger.jsonl
+```
+
+Multi-plan layout, enabled by `--plan-id <id>` or `--auto-plan-id` on `omc ultragoal create-goals`:
+
+```
+.omc/ultragoal/plans/{planId}/brief.md
+.omc/ultragoal/plans/{planId}/goals.json
+.omc/ultragoal/plans/{planId}/ledger.jsonl
+```
+
+`--auto-plan-id` derives `{epochMs}-{slug}` from the brief title, so two parallel sessions running `omc ultragoal create-goals --auto-plan-id ...` never collide. Subsequent commands (`status`, `add-goal`, `complete-goals`, `checkpoint`, `record-review-blockers`) auto-resolve the plan when there is exactly one; when there are multiple, they require `--plan-id <id>`. `omc ultragoal list-plans` enumerates the available plan ids.
+
 ### When to Re-run Setup
 
 - **First time**: Run after installation (choose project or global)

@@ -16143,7 +16143,7 @@ function processSubagentStart(input) {
             parentMode,
             taskDescription: input.prompt,
             at: trackedAgent.started_at
-          });
+          }, sessionId);
         } catch {
         }
       }
@@ -16218,7 +16218,7 @@ function processSubagentStop(input) {
           success: succeeded,
           outputSummary: agentIndex !== -1 ? state.agents[agentIndex]?.output_summary : input.output,
           at: agentIndex !== -1 ? state.agents[agentIndex]?.completed_at : (/* @__PURE__ */ new Date()).toISOString()
-        });
+        }, sessionId);
       } catch {
       }
       const runningCount = state.agents.filter(

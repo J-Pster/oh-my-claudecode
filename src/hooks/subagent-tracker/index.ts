@@ -670,7 +670,7 @@ export function processSubagentStart(input: SubagentStartInput): HookOutput {
             parentMode,
             taskDescription: input.prompt,
             at: trackedAgent.started_at,
-          });
+          }, sessionId);
         } catch { /* best-effort */ }
       }
 
@@ -772,7 +772,7 @@ export function processSubagentStop(input: SubagentStopInput): HookOutput {
           success: succeeded,
           outputSummary: agentIndex !== -1 ? state.agents[agentIndex]?.output_summary : input.output,
           at: agentIndex !== -1 ? state.agents[agentIndex]?.completed_at : new Date().toISOString(),
-        });
+        }, sessionId);
       } catch { /* best-effort */ }
 
       const runningCount = state.agents.filter(
